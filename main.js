@@ -31,18 +31,23 @@ class LinkMapPlugin extends obsidian_1.Plugin {
 exports.default = LinkMapPlugin;
 function buildLinkTree(app_1, rootFolder_1) {
     return __awaiter(this, arguments, void 0, function* (app, rootFolder, maxDepth = 7, rootLimit = 20) {
-        var _a;
         const markdownFiles = app.vault
             .getMarkdownFiles()
             .filter((f) => f.path.startsWith(rootFolder + "/"));
         const backlinksMap = new Map();
+        // Используем неофициальный метод getBacklinksForFile, обойдя проверку типов через any
         for (const file of markdownFiles) {
-            const links = ((_a = app.metadataCache.getFileCache(file)) === null || _a === void 0 ? void 0 : _a.links) || [];
-            for (const link of links) {
-                const target = link.link.split("#")[0];
-                if (!backlinksMap.has(target))
-                    backlinksMap.set(target, new Set());
-                backlinksMap.get(target).add(file.path);
+            // метод getBacklinksForFile отсутствует в типах, но доступен во время выполнения
+            const cache = app.metadataCache;
+            const backlinksRaw = cache.getBacklinksForFile(file);
+            if (!backlinksRaw)
+                continue;
+            // backlinksRaw — Map-подобный объект с методами keys() и get()
+            for (const src of backlinksRaw.keys()) {
+                const normalizedSrc = (0, obsidian_1.normalizePath)(src);
+                if (!backlinksMap.has(file.path))
+                    backlinksMap.set(file.path, new Set());
+                backlinksMap.get(file.path).add(normalizedSrc);
             }
         }
         const visited = new Set();
@@ -51,10 +56,10 @@ function buildLinkTree(app_1, rootFolder_1) {
                 return null;
             visited.add(path);
             const children = [];
-            const backlinks = backlinksMap.get(path);
-            if (backlinks) {
-                for (const source of backlinks) {
-                    const child = buildNode(source, depth + 1);
+            const sources = backlinksMap.get(path);
+            if (sources) {
+                for (const srcPath of sources) {
+                    const child = buildNode(srcPath, depth + 1);
                     if (child)
                         children.push(child);
                 }
@@ -67,19 +72,16 @@ function buildLinkTree(app_1, rootFolder_1) {
             children: markdownFiles
                 .slice(0, rootLimit)
                 .map((f) => buildNode(f.path, 1))
-                .filter((node) => Boolean(node))
+                .filter((n) => Boolean(n))
         };
-        // Определяем путь для вывода
         let outputPath = "links.json";
         const adapter = app.vault.adapter;
         if (adapter instanceof obsidian_1.FileSystemAdapter) {
             const basePath = adapter.getBasePath();
             outputPath = (0, obsidian_1.normalizePath)(`${basePath}/.obsidian/plugins/obsidian-linkmap-plugin/visuals/links.json`);
-            // Записываем напрямую через fs, чтобы избежать двойного применения basePath
             yield fs_1.promises.writeFile(outputPath, JSON.stringify(root, null, 2));
         }
         else {
-            // Пишем внутри хранилища Obsidian
             yield app.vault.adapter.write(outputPath, JSON.stringify(root, null, 2));
         }
     });

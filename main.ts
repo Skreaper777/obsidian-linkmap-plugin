@@ -35,12 +35,17 @@ export async function buildLinkTree(
 
   const backlinksMap: Map<string, Set<string>> = new Map();
 
+  // Используем неофициальный метод getBacklinksForFile, обойдя проверку типов через any
   for (const file of markdownFiles) {
-    const links = app.metadataCache.getFileCache(file)?.links || [];
-    for (const link of links) {
-      const target = link.link.split("#")[0];
-      if (!backlinksMap.has(target)) backlinksMap.set(target, new Set());
-      backlinksMap.get(target)!.add(file.path);
+    // метод getBacklinksForFile отсутствует в типах, но доступен во время выполнения
+    const cache: any = app.metadataCache;
+    const backlinksRaw: any = cache.getBacklinksForFile(file);
+    if (!backlinksRaw) continue;
+    // backlinksRaw — Map-подобный объект с методами keys() и get()
+    for (const src of backlinksRaw.keys()) {
+      const normalizedSrc = normalizePath(src as string);
+      if (!backlinksMap.has(file.path)) backlinksMap.set(file.path, new Set());
+      backlinksMap.get(file.path)!.add(normalizedSrc);
     }
   }
 
@@ -51,10 +56,10 @@ export async function buildLinkTree(
     visited.add(path);
 
     const children: TreeNode[] = [];
-    const backlinks = backlinksMap.get(path);
-    if (backlinks) {
-      for (const source of backlinks) {
-        const child = buildNode(source, depth + 1);
+    const sources = backlinksMap.get(path);
+    if (sources) {
+      for (const srcPath of sources) {
+        const child = buildNode(srcPath, depth + 1);
         if (child) children.push(child);
       }
     }
@@ -68,10 +73,9 @@ export async function buildLinkTree(
     children: markdownFiles
       .slice(0, rootLimit)
       .map((f: TFile) => buildNode(f.path, 1))
-      .filter((node): node is TreeNode => Boolean(node))
+      .filter((n): n is TreeNode => Boolean(n))
   };
 
-  // Определяем путь для вывода
   let outputPath = "links.json";
   const adapter = app.vault.adapter;
 
@@ -80,10 +84,8 @@ export async function buildLinkTree(
     outputPath = normalizePath(
       `${basePath}/.obsidian/plugins/obsidian-linkmap-plugin/visuals/links.json`
     );
-    // Записываем напрямую через fs, чтобы избежать двойного применения basePath
     await fs.writeFile(outputPath, JSON.stringify(root, null, 2));
   } else {
-    // Пишем внутри хранилища Obsidian
     await app.vault.adapter.write(outputPath, JSON.stringify(root, null, 2));
   }
 }
