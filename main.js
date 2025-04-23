@@ -39,7 +39,7 @@ exports.default = LinkMapPlugin;
  * @param dedupe Флаг включения уникальности узлов (true = не повторять, false = разрешать повторы)
  */
 function buildLinkTree(app_1, rootFolder_1) {
-    return __awaiter(this, arguments, void 0, function* (app, rootFolder, maxDepth = 0, rootLimit = 0, dedupe = false) {
+    return __awaiter(this, arguments, void 0, function* (app, rootFolder, maxDepth = 5, rootLimit = 0, dedupe = false) {
         var _a, _b;
         const vault = app.vault;
         const cacheAny = app.metadataCache;
@@ -75,14 +75,36 @@ function buildLinkTree(app_1, rootFolder_1) {
         // Построение дерева
         const visited = new Set();
         function buildNode(path, depth) {
-            // Обрезаем по глубине
+            var _a, _b;
+            // Ограничение по глубине
             if (depth > depthLimit)
                 return null;
-            // Проверка дублирования
+            // Убираем дубликаты, если включено
             if (dedupe) {
                 if (visited.has(path))
                     return null;
                 visited.add(path);
+            }
+            // ✨ Лениво достраиваем карту, если этот файл не анализировался ранее
+            if (!backlinksMap.has(path)) {
+                const maybeFile = vault.getAbstractFileByPath(path);
+                if (maybeFile instanceof obsidian_1.TFile && maybeFile.extension === "md") {
+                    const blMeta = (_a = cacheAny.getBacklinksForFile) === null || _a === void 0 ? void 0 : _a.call(cacheAny, maybeFile);
+                    if (blMeta === null || blMeta === void 0 ? void 0 : blMeta.data) {
+                        const set = new Set();
+                        for (const [srcRaw] of blMeta.data) {
+                            const src = (0, obsidian_1.normalizePath)(srcRaw.split("#")[0]);
+                            set.add(src);
+                        }
+                        // Можно добавить и нерешённые ссылки, если нужно
+                        for (const [srcRaw] of (_b = blMeta.unresolved) !== null && _b !== void 0 ? _b : []) {
+                            const src = (0, obsidian_1.normalizePath)(srcRaw.split("#")[0]);
+                            set.add(src);
+                        }
+                        if (set.size)
+                            backlinksMap.set(path, set);
+                    }
+                }
             }
             const children = [];
             const sources = backlinksMap.get(path);

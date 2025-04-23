@@ -35,7 +35,7 @@ export default class LinkMapPlugin extends Plugin {
 export async function buildLinkTree(
   app: App,
   rootFolder: string,
-  maxDepth: number = 0,
+  maxDepth: number = 5,
   rootLimit: number = 0,
   dedupe: boolean = false
 ) {
@@ -76,12 +76,35 @@ export async function buildLinkTree(
   // Построение дерева
   const visited = new Set<string>();
   function buildNode(path: string, depth: number): TreeNode | null {
-    // Обрезаем по глубине
+    // Ограничение по глубине
     if (depth > depthLimit) return null;
-    // Проверка дублирования
+
+    // Убираем дубликаты, если включено
     if (dedupe) {
       if (visited.has(path)) return null;
       visited.add(path);
+    }
+
+    // ✨ Лениво достраиваем карту, если этот файл не анализировался ранее
+    if (!backlinksMap.has(path)) {
+      const maybeFile = vault.getAbstractFileByPath(path);
+      if (maybeFile instanceof TFile && maybeFile.extension === "md") {
+        const blMeta: { data: Map<string, any>; unresolved: Map<string, any> } | undefined =
+          cacheAny.getBacklinksForFile?.(maybeFile);
+        if (blMeta?.data) {
+          const set = new Set<string>();
+          for (const [srcRaw] of blMeta.data) {
+            const src = normalizePath((srcRaw as string).split("#")[0]);
+            set.add(src);
+          }
+          // Можно добавить и нерешённые ссылки, если нужно
+          for (const [srcRaw] of blMeta.unresolved ?? []) {
+            const src = normalizePath((srcRaw as string).split("#")[0]);
+            set.add(src);
+          }
+          if (set.size) backlinksMap.set(path, set);
+        }
+      }
     }
 
     const children: TreeNode[] = [];
@@ -92,8 +115,10 @@ export async function buildLinkTree(
         if (child) children.push(child);
       }
     }
+
     return { name: path, value: 0, children };
   }
+
 
   // Формируем корневой узел
   const root: TreeNode = {
