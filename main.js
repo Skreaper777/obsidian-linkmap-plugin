@@ -20,7 +20,8 @@ class LinkMapPlugin extends obsidian_1.Plugin {
                 id: "generate-link-tree",
                 name: "Сгенерировать карту ссылок (links.json)",
                 callback: () => __awaiter(this, void 0, void 0, function* () {
-                    yield buildLinkTree(this.app, "Теги", 7, 20);
+                    // Не передаём параметры — по умолчанию maxDepth=0 и rootLimit=0 => без ограничений
+                    yield buildLinkTree(this.app, "Теги");
                     new obsidian_1.Notice("Файл links.json обновлён 🚀");
                 })
             });
@@ -30,73 +31,60 @@ class LinkMapPlugin extends obsidian_1.Plugin {
 }
 exports.default = LinkMapPlugin;
 function buildLinkTree(app_1, rootFolder_1) {
-    return __awaiter(this, arguments, void 0, function* (app, rootFolder, maxDepth = 7, rootLimit = 20) {
+    return __awaiter(this, arguments, void 0, function* (app, rootFolder, maxDepth = 0, rootLimit = 0) {
+        var _a;
         const vault = app.vault;
         const cache = app.metadataCache;
-        // Все markdown-файлы в папке rootFolder
+        // 0 означает отсутствие ограничений
+        const depthLimit = maxDepth > 0 ? maxDepth : Infinity;
+        const limit = rootLimit > 0 ? rootLimit : Infinity;
         const markdownFiles = vault
             .getMarkdownFiles()
             .filter((f) => f.path.startsWith(rootFolder + "/"));
-        // Карта: destPath -> Set<sourcePath>
+        // Карта обратных ссылок
         const backlinksMap = new Map();
+        const cacheAny = cache;
+        // Собираем обратные ссылки через неофициальный getBacklinksForFile
         for (const file of markdownFiles) {
-            const sourcePath = file.path;
-            // 1) Разрешённые ссылки (wiki и markdown) через resolvedLinks
-            const resolved = cache.resolvedLinks[sourcePath] || {};
-            for (const linkPath in resolved) {
-                const dest = cache.getFirstLinkpathDest(linkPath, sourcePath);
-                if (!dest)
-                    continue;
-                const destPath = (0, obsidian_1.normalizePath)(dest.path);
-                if (!backlinksMap.has(destPath))
-                    backlinksMap.set(destPath, new Set());
-                backlinksMap.get(destPath).add(sourcePath);
-            }
-            // 2) Сырые ссылки из метаданных (например блок-референсы)
-            const fileCache = cache.getFileCache(file);
-            const rawLinks = (fileCache === null || fileCache === void 0 ? void 0 : fileCache.links) || [];
-            for (const link of rawLinks) {
-                const rawPath = link.link.split("#")[0];
-                const dest = cache.getFirstLinkpathDest(rawPath, sourcePath);
-                if (!dest)
-                    continue;
-                const destPath = (0, obsidian_1.normalizePath)(dest.path);
-                if (!backlinksMap.has(destPath))
-                    backlinksMap.set(destPath, new Set());
-                backlinksMap.get(destPath).add(sourcePath);
+            const rawBacklinks = (_a = cacheAny.getBacklinksForFile) === null || _a === void 0 ? void 0 : _a.call(cacheAny, file);
+            if (!rawBacklinks)
+                continue;
+            for (const srcRaw of rawBacklinks.keys()) {
+                const src = (0, obsidian_1.normalizePath)(srcRaw);
+                if (!backlinksMap.has(file.path))
+                    backlinksMap.set(file.path, new Set());
+                backlinksMap.get(file.path).add(src);
             }
         }
         const visited = new Set();
         function buildNode(path, depth) {
-            if (visited.has(path) || depth > maxDepth)
+            if (visited.has(path) || depth > depthLimit)
                 return null;
             visited.add(path);
             const children = [];
             const sources = backlinksMap.get(path);
             if (sources) {
                 for (const src of sources) {
-                    const child = buildNode(src, depth + 1);
-                    if (child)
-                        children.push(child);
+                    const node = buildNode(src, depth + 1);
+                    if (node)
+                        children.push(node);
                 }
             }
             return { name: path, value: 0, children };
         }
-        // Строим корень
         const root = {
             name: rootFolder,
             value: 0,
             children: markdownFiles
-                .slice(0, rootLimit)
+                .slice(0, limit)
                 .map(f => buildNode(f.path, 1))
                 .filter((n) => Boolean(n))
         };
-        // Путь вывода
         let outputPath = "links.json";
         const adapter = vault.adapter;
         if (adapter instanceof obsidian_1.FileSystemAdapter) {
-            const basePath = adapter.getBasePath();
-            outputPath = (0, obsidian_1.normalizePath)(`${basePath}/.obsidian/plugins/obsidian-linkmap-plugin/visuals/links.json`);
+            const base = adapter.getBasePath();
+            outputPath = (0, obsidian_1.normalizePath)(`${base}/.obsidian/plugins/obsidian-linkmap-plugin/visuals/links.json`);
             yield fs_1.promises.writeFile(outputPath, JSON.stringify(root, null, 2));
         }
         else {
