@@ -1,0 +1,10 @@
+{
+  "id": "obsidian-linkmap-plugin",
+  "name": "Link Map Plugin (REBORN)",
+  "version": "0.1.0",
+  "minAppVersion": "0.12.0",
+  "description": "Самодостаточный плагин для генерации иерархии ссылок.",
+  "author": "Станислав",
+  "authorUrl": "",
+  "main": "main.js"
+}
