@@ -13,23 +13,105 @@ exports.buildLinkTree = buildLinkTree;
 // 📁 main.ts — основной файл плагина
 const obsidian_1 = require("obsidian");
 const fs_1 = require("fs");
+const DEFAULT_SETTINGS = {
+    rootFolder: "Теги",
+    maxDepth: 5,
+    rootLimit: 0,
+    dedupe: false
+};
 class LinkMapPlugin extends obsidian_1.Plugin {
+    constructor() {
+        super(...arguments);
+        this.settings = DEFAULT_SETTINGS;
+    }
     onload() {
         return __awaiter(this, void 0, void 0, function* () {
+            yield this.loadSettings();
             this.addCommand({
                 id: "generate-link-tree",
                 name: "Сгенерировать карту ссылок (links.json)",
                 callback: () => __awaiter(this, void 0, void 0, function* () {
-                    // Последний параметр dedupe: true — исключаем дубли, false — отключаем проверку повторов
-                    yield buildLinkTree(this.app, "Теги", 0, 0, true);
-                    new obsidian_1.Notice("Файл links.json обновлён 🚀");
+                    yield buildLinkTree(this.app, this.settings.rootFolder, this.settings.maxDepth, this.settings.rootLimit, this.settings.dedupe);
+                    new obsidian_1.Notice(`links.json обновлён ✔️ depth=${this.settings.maxDepth}, rootLimit=${this.settings.rootLimit}, dedupe=${this.settings.dedupe}`);
                 })
             });
+            this.addCommand({
+                id: "generate-link-tree-debug",
+                name: "Сгенерировать карту ссылок (debug: dedupe=false)",
+                callback: () => __awaiter(this, void 0, void 0, function* () {
+                    // Передаём те же настройки, но отключаем dedupe для проверки
+                    yield buildLinkTree(this.app, this.settings.rootFolder, this.settings.maxDepth, this.settings.rootLimit, false);
+                    new obsidian_1.Notice(`Debug links.json готов: depth=${this.settings.maxDepth}, rootLimit=${this.settings.rootLimit}, dedupe=false`);
+                })
+            });
+            this.addSettingTab(new LinkMapSettingTab(this.app, this));
         });
     }
     onunload() { }
+    loadSettings() {
+        return __awaiter(this, void 0, void 0, function* () {
+            this.settings = Object.assign({}, DEFAULT_SETTINGS, yield this.loadData());
+        });
+    }
+    saveSettings() {
+        return __awaiter(this, void 0, void 0, function* () {
+            yield this.saveData(this.settings);
+        });
+    }
 }
 exports.default = LinkMapPlugin;
+class LinkMapSettingTab extends obsidian_1.PluginSettingTab {
+    constructor(app, plugin) {
+        super(app, plugin);
+        this.plugin = plugin;
+    }
+    display() {
+        const { containerEl } = this;
+        containerEl.empty();
+        containerEl.createEl("h2", { text: "Настройки Link Map" });
+        new obsidian_1.Setting(containerEl)
+            .setName("Корневая папка")
+            .setDesc("С какой папки начинать построение дерева")
+            .addText(text => text
+            .setPlaceholder("Теги")
+            .setValue(this.plugin.settings.rootFolder)
+            .onChange((value) => __awaiter(this, void 0, void 0, function* () {
+            this.plugin.settings.rootFolder = value.trim() || "Теги";
+            yield this.plugin.saveSettings();
+        })));
+        new obsidian_1.Setting(containerEl)
+            .setName("Максимальная глубина")
+            .setDesc("0 = без ограничения")
+            .addText(text => text
+            .setPlaceholder("0")
+            .setValue(String(this.plugin.settings.maxDepth))
+            .onChange((value) => __awaiter(this, void 0, void 0, function* () {
+            const num = Number(value) || 0;
+            this.plugin.settings.maxDepth = num;
+            yield this.plugin.saveSettings();
+        })));
+        new obsidian_1.Setting(containerEl)
+            .setName("Лимит корневых элементов")
+            .setDesc("0 = без ограничения")
+            .addText(text => text
+            .setPlaceholder("0")
+            .setValue(String(this.plugin.settings.rootLimit))
+            .onChange((value) => __awaiter(this, void 0, void 0, function* () {
+            const num = Number(value) || 0;
+            this.plugin.settings.rootLimit = num;
+            yield this.plugin.saveSettings();
+        })));
+        new obsidian_1.Setting(containerEl)
+            .setName("Убирать дубликаты")
+            .setDesc("Если отключить, страницы могут встречаться несколько раз")
+            .addToggle(toggle => toggle
+            .setValue(this.plugin.settings.dedupe)
+            .onChange((value) => __awaiter(this, void 0, void 0, function* () {
+            this.plugin.settings.dedupe = value;
+            yield this.plugin.saveSettings();
+        })));
+    }
+}
 /**
  * Строит дерево обратных ссылок для папки rootFolder.
  * @param app Объект плагина Obsidian
@@ -39,7 +121,7 @@ exports.default = LinkMapPlugin;
  * @param dedupe Флаг включения уникальности узлов (true = не повторять, false = разрешать повторы)
  */
 function buildLinkTree(app_1, rootFolder_1) {
-    return __awaiter(this, arguments, void 0, function* (app, rootFolder, maxDepth = 5, rootLimit = 0, dedupe = false) {
+    return __awaiter(this, arguments, void 0, function* (app, rootFolder, maxDepth = 7, rootLimit = 0, dedupe = false) {
         var _a, _b;
         const vault = app.vault;
         const cacheAny = app.metadataCache;
@@ -123,7 +205,7 @@ function buildLinkTree(app_1, rootFolder_1) {
             value: 0,
             children: markdownFiles
                 .slice(0, limit)
-                .map(f => buildNode(f.path, 1))
+                .map(f => buildNode(f.path, 0))
                 .filter((n) => Boolean(n))
         };
         // Запись в файл

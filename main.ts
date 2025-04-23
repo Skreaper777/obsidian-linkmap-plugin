@@ -1,5 +1,5 @@
 // 📁 main.ts — основной файл плагина
-import { Plugin, Notice, normalizePath, FileSystemAdapter, App, TFile } from "obsidian";
+import { Plugin, Notice, normalizePath, FileSystemAdapter, App, TFile, PluginSettingTab, Setting } from "obsidian";
 import { promises as fs } from "fs";
 
 interface TreeNode {
@@ -8,21 +8,145 @@ interface TreeNode {
   children?: TreeNode[];
 }
 
+interface LinkMapSettings {
+  rootFolder: string;
+  maxDepth: number;
+  rootLimit: number;
+  dedupe: boolean;
+}
+
+const DEFAULT_SETTINGS: LinkMapSettings = {
+  rootFolder: "Теги",
+  maxDepth: 5,
+  rootLimit: 0,
+  dedupe: false
+};
+
+
+
 export default class LinkMapPlugin extends Plugin {
+  settings: LinkMapSettings = DEFAULT_SETTINGS;
+
   async onload() {
-    this.addCommand({
+    await this.loadSettings();
+
+
+this.addCommand({
       id: "generate-link-tree",
       name: "Сгенерировать карту ссылок (links.json)",
       callback: async () => {
-        // Последний параметр dedupe: true — исключаем дубли, false — отключаем проверку повторов
-        await buildLinkTree(this.app, "Теги", 0, 0, true);
-        new Notice("Файл links.json обновлён 🚀");
+        await buildLinkTree(
+          this.app,
+          this.settings.rootFolder,
+          this.settings.maxDepth,
+          this.settings.rootLimit,
+          this.settings.dedupe
+        );
+        new Notice(`links.json обновлён ✔️ depth=${this.settings.maxDepth}, rootLimit=${this.settings.rootLimit}, dedupe=${this.settings.dedupe}`);
       }
     });
+
+
+
+this.addCommand({
+  id: "generate-link-tree-debug",
+  name: "Сгенерировать карту ссылок (debug: dedupe=false)",
+  callback: async () => {
+    // Передаём те же настройки, но отключаем dedupe для проверки
+    await buildLinkTree(
+      this.app,
+      this.settings.rootFolder,
+      this.settings.maxDepth,
+      this.settings.rootLimit,
+      false
+    );
+    new Notice(`Debug links.json готов: depth=${this.settings.maxDepth}, rootLimit=${this.settings.rootLimit}, dedupe=false`);
+  }
+});
+
+
+    this.addSettingTab(new LinkMapSettingTab(this.app, this));
   }
 
   onunload() {}
+
+  async loadSettings() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+  }
+
+  async saveSettings() {
+    await this.saveData(this.settings);
+  }
 }
+
+class LinkMapSettingTab extends PluginSettingTab {
+  plugin: LinkMapPlugin;
+
+  constructor(app: App, plugin: LinkMapPlugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+
+  display(): void {
+    const { containerEl } = this;
+    containerEl.empty();
+    containerEl.createEl("h2", { text: "Настройки Link Map" });
+
+    new Setting(containerEl)
+      .setName("Корневая папка")
+      .setDesc("С какой папки начинать построение дерева")
+      .addText(text =>
+        text
+          .setPlaceholder("Теги")
+          .setValue(this.plugin.settings.rootFolder)
+          .onChange(async value => {
+            this.plugin.settings.rootFolder = value.trim() || "Теги";
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Максимальная глубина")
+      .setDesc("0 = без ограничения")
+      .addText(text =>
+        text
+          .setPlaceholder("0")
+          .setValue(String(this.plugin.settings.maxDepth))
+          .onChange(async value => {
+            const num = Number(value) || 0;
+            this.plugin.settings.maxDepth = num;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Лимит корневых элементов")
+      .setDesc("0 = без ограничения")
+      .addText(text =>
+        text
+          .setPlaceholder("0")
+          .setValue(String(this.plugin.settings.rootLimit))
+          .onChange(async value => {
+            const num = Number(value) || 0;
+            this.plugin.settings.rootLimit = num;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Убирать дубликаты")
+      .setDesc("Если отключить, страницы могут встречаться несколько раз")
+      .addToggle(toggle =>
+        toggle
+          .setValue(this.plugin.settings.dedupe)
+          .onChange(async value => {
+            this.plugin.settings.dedupe = value;
+            await this.plugin.saveSettings();
+          })
+      );
+  }
+}
+
 
 /**
  * Строит дерево обратных ссылок для папки rootFolder.
@@ -35,7 +159,7 @@ export default class LinkMapPlugin extends Plugin {
 export async function buildLinkTree(
   app: App,
   rootFolder: string,
-  maxDepth: number = 5,
+  maxDepth: number = 7,
   rootLimit: number = 0,
   dedupe: boolean = false
 ) {
@@ -126,7 +250,7 @@ export async function buildLinkTree(
     value: 0,
     children: markdownFiles
       .slice(0, limit)
-      .map(f => buildNode(f.path, 1))
+      .map(f => buildNode(f.path, 0))
       .filter((n): n is TreeNode => Boolean(n))
   };
 
