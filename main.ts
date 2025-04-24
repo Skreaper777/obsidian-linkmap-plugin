@@ -17,8 +17,8 @@ interface LinkMapSettings {
 
 const DEFAULT_SETTINGS: LinkMapSettings = {
   rootFolder: "Теги",
-  maxDepth: 5,
-  rootLimit: 0,
+  maxDepth: 3,
+  rootLimit: 10,
   dedupe: false
 };
 

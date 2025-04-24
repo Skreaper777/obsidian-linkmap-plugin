@@ -15,8 +15,8 @@ const obsidian_1 = require("obsidian");
 const fs_1 = require("fs");
 const DEFAULT_SETTINGS = {
     rootFolder: "Теги",
-    maxDepth: 5,
-    rootLimit: 0,
+    maxDepth: 3,
+    rootLimit: 10,
     dedupe: false
 };
 class LinkMapPlugin extends obsidian_1.Plugin {
