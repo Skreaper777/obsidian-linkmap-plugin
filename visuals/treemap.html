@@ -34,6 +34,8 @@
       font-size: 12px;
       color: #000;
       padding: 2px;
+      cursor: pointer;
+      transition: all 0.2s ease-in-out;
     }
   </style>
 </head>
@@ -50,23 +52,26 @@
     <option>6</option>
     <option>7</option>
   </select>
+  <button id="reset">Назад</button>
 </div>
 <div id="chart"></div>
 <script>
   const chart = d3.select("#chart");
   const depthSelect = document.getElementById("depth");
+  const resetButton = document.getElementById("reset");
 
-  function draw(data, maxDepth = Infinity) {
+  const color = d3.scaleOrdinal(d3.schemeCategory10);
+  let originalRoot = null;
+  let currentFocus = null;
+
+  function draw(focusNode, maxDepth = Infinity) {
     chart.selectAll("*").remove();
 
-    const width = window.innerWidth;
-    const height = document.getElementById("chart").clientHeight;
+    const width = chart.node().clientWidth;
+    const height = chart.node().clientHeight;
 
-    const root = d3.hierarchy(data).sum(d => d.value || 0).sort((a, b) => b.value - a.value);
+    const root = d3.hierarchy(focusNode).sum(d => d.value || 0).sort((a, b) => b.value - a.value);
     d3.treemap().size([width, height]).paddingInner(2)(root);
-
-    // Создаем цветовую палитру по имени узла
-    const nameColor = d3.scaleOrdinal(d3.schemeCategory10);
 
     const nodes = chart.selectAll(".node")
       .data(root.descendants().filter(d => d.depth <= maxDepth))
@@ -76,27 +81,39 @@
       .style("top", d => d.y0 + "px")
       .style("width", d => Math.max(0, d.x1 - d.x0) + "px")
       .style("height", d => Math.max(0, d.y1 - d.y0) + "px")
-      .style("background", d => nameColor(d.parent ? d.parent.data.name + "-" + d.data.name : d.data.name))
+      .style("background", d => color(d.parent ? d.parent.data.name + "-" + d.data.name : d.data.name))
       .text(d => {
         const w = d.x1 - d.x0;
         const h = d.y1 - d.y0;
         return (w > 40 && h > 20) ? d.data.name : "";
       })
+      .on("click", (event, d) => {
+        if (d.children) {
+          currentFocus = d.data;
+          draw(currentFocus, Infinity);
+        }
+      })
       .append("title")
       .text(d => d.data.name + "\nСсылок: " + (d.data.value || 0));
   }
 
-  fetch("links-html-1.json")
+  fetch("links.json")
     .then(res => res.json())
     .then(data => {
-      draw(data);
+      originalRoot = data;
+      currentFocus = data;
+      draw(currentFocus);
       depthSelect.addEventListener("change", () => {
         const val = depthSelect.value;
-        draw(data, val === "all" ? Infinity : +val);
+        draw(currentFocus, val === "all" ? Infinity : +val);
+      });
+      resetButton.addEventListener("click", () => {
+        currentFocus = originalRoot;
+        draw(originalRoot);
       });
     })
     .catch(err => {
-      chart.append("div").text("Ошибка загрузки links-html-1.json");
+      chart.append("div").text("Ошибка загрузки links.json");
       console.error(err);
     });
 </script>
