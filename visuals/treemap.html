@@ -54,7 +54,6 @@
 <div id="chart"></div>
 <script>
   const chart = d3.select("#chart");
-  const color = d3.scaleOrdinal(d3.schemeCategory10);
   const depthSelect = document.getElementById("depth");
 
   function draw(data, maxDepth = Infinity) {
@@ -66,6 +65,9 @@
     const root = d3.hierarchy(data).sum(d => d.value || 0).sort((a, b) => b.value - a.value);
     d3.treemap().size([width, height]).paddingInner(2)(root);
 
+    // Создаем цветовую палитру по имени узла
+    const nameColor = d3.scaleOrdinal(d3.schemeCategory10);
+
     const nodes = chart.selectAll(".node")
       .data(root.descendants().filter(d => d.depth <= maxDepth))
       .join("div")
@@ -74,7 +76,7 @@
       .style("top", d => d.y0 + "px")
       .style("width", d => Math.max(0, d.x1 - d.x0) + "px")
       .style("height", d => Math.max(0, d.y1 - d.y0) + "px")
-      .style("background", d => color(d.depth))
+      .style("background", d => nameColor(d.parent ? d.parent.data.name + "-" + d.data.name : d.data.name))
       .text(d => {
         const w = d.x1 - d.x0;
         const h = d.y1 - d.y0;
@@ -84,7 +86,7 @@
       .text(d => d.data.name + "\nСсылок: " + (d.data.value || 0));
   }
 
-  fetch("links.json")
+  fetch("links-html-1.json")
     .then(res => res.json())
     .then(data => {
       draw(data);
@@ -94,7 +96,7 @@
       });
     })
     .catch(err => {
-      chart.append("div").text("Ошибка загрузки links.json");
+      chart.append("div").text("Ошибка загрузки links-html-1.json");
       console.error(err);
     });
 </script>
