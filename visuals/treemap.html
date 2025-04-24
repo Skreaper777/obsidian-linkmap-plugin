@@ -50,6 +50,9 @@
       cursor: pointer;
       transition: all 0.3s ease;
     }
+    select {
+      margin-right: 10px;
+    }
   </style>
 </head>
 <body>
@@ -65,6 +68,11 @@
     <option>7</option>
     <option value="all">All</option>
   </select>
+  <label for="metric">Размер по: </label>
+  <select id="metric">
+    <option value="total" selected>total</option>
+    <option value="value">value</option>
+  </select>
   <button id="reset">Назад</button>
   <div id="breadcrumbs"></div>
 </div>
@@ -72,6 +80,7 @@
 <script>
   const chart = d3.select("#chart");
   const depthSelect = document.getElementById("depth");
+  const metricSelect = document.getElementById("metric");
   const resetButton = document.getElementById("reset");
   const breadcrumbs = document.getElementById("breadcrumbs");
 
@@ -99,17 +108,28 @@
     });
   }
 
+  function getVisibleChildren(data) {
+    return (data.children || []).filter(child => !hiddenNodes.has(child.name));
+  }
+
   function draw(focusNode, maxDepth = 1) {
     chart.selectAll("*").remove();
 
     const width = chart.node().clientWidth;
     const height = chart.node().clientHeight;
+    const metric = metricSelect.value;
 
-    const root = d3.hierarchy(focusNode).sum(d => d.value || 0).sort((a, b) => b.value - a.value);
+    const cleanData = JSON.parse(JSON.stringify(focusNode));
+    cleanData.children = getVisibleChildren(cleanData);
+
+    const root = d3.hierarchy(cleanData)
+      .sum(d => metric === "total" ? (d.total || 0) : (d.value || 0))
+      .sort((a, b) => b.value - a.value);
+
     d3.treemap().size([width, height]).paddingInner(2)(root);
 
     chart.selectAll(".node")
-      .data(root.descendants().filter(d => d.depth <= maxDepth && !hiddenNodes.has(d.data.name)))
+      .data(root.descendants().filter(d => d.depth <= maxDepth))
       .join("div")
       .attr("class", "node")
       .style("left", d => d.x0 + "px")
@@ -123,9 +143,12 @@
         return (w > 40 && h > 20) ? d.data.name : "";
       })
       .on("click", (event, d) => {
-        if (event.ctrlKey) {
+        if (event.altKey) {
           hiddenNodes.add(d.data.name);
           draw(currentFocus, 1);
+        } else if (event.ctrlKey) {
+          hiddenNodes.add(d.data.name);
+          d3.select(event.currentTarget).remove();
         } else if (d.children) {
           currentFocus = d.data;
           pathStack.push(d);
@@ -148,10 +171,16 @@
       draw(currentFocus, 1);
       updateBreadcrumbs();
       depthSelect.value = "1";
+
       depthSelect.addEventListener("change", () => {
         const val = depthSelect.value;
         draw(currentFocus, val === "all" ? Infinity : +val);
       });
+
+      metricSelect.addEventListener("change", () => {
+        draw(currentFocus, depthSelect.value === "all" ? Infinity : +depthSelect.value);
+      });
+
       resetButton.addEventListener("click", () => {
         currentFocus = originalRoot;
         pathStack = [d3.hierarchy(originalRoot)];
