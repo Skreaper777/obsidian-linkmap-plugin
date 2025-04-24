@@ -26,7 +26,7 @@ const fs_1 = require("fs");
 const DEFAULT_SETTINGS = {
     rootFolder: "Теги",
     maxDepth: 5,
-    rootLimit: 30,
+    rootLimit: 5,
     dedupe: false,
     sizeLimitKB: 0,
 };
