@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Obsidian Treemap</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      font-family: sans-serif;
+      background: #1e1e1e;
+      color: #f0f0f0;
+    }
+    .node {
+      position: absolute;
+      overflow: hidden;
+      border: 1px solid #333;
+      font-size: 11px;
+      padding: 2px;
+      line-height: 1.1em;
+      text-align: left;
+      word-break: break-word;
+      color: black;
+      background: #888;
+      cursor: pointer;
+    }
+    .tooltip {
+      position: absolute;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      pointer-events: none;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+<div id="chart" style="width:100%;height:100%;position:relative;"></div>
+<script>
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+
+  fetch("links.json")
+    .then(res => res.json())
+    .then(data => {
+      const root = d3.hierarchy(data).sum(d => d.total || d.value);
+
+      d3.treemap()
+        .size([width, height])
+        .padding(1)
+        (root);
+
+      const chart = d3.select("#chart");
+
+      const tooltip = chart.append("div")
+        .attr("class", "tooltip")
+        .style("opacity", 0);
+
+      const nodes = chart.selectAll("div.node")
+        .data(root.leaves())
+        .enter()
+        .append("div")
+        .attr("class", "node")
+        .style("left", d => d.x0 + "px")
+        .style("top", d => d.y0 + "px")
+        .style("width", d => (d.x1 - d.x0) + "px")
+        .style("height", d => (d.y1 - d.y0) + "px")
+        .style("background", d => d3.interpolateRainbow(Math.random()))
+        .text(d => d.data.name)
+        .on("mouseover", (event, d) => {
+          tooltip.transition().duration(200).style("opacity", 1);
+          tooltip.html(`<strong>${d.data.name}</strong><br>Ссылок: ${d.data.value}`)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 20) + "px");
+        })
+        .on("mouseout", () => {
+          tooltip.transition().duration(200).style("opacity", 0);
+        });
+    })
+    .catch(err => {
+      document.getElementById("chart").innerText = "Не удалось загрузить links.json. Убедитесь, что запускаете страницу через http://, а не через file://";
+      console.error("Ошибка загрузки links.json:", err);
+    });
+</script>
+</body>
+</html>
