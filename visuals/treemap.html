@@ -135,8 +135,8 @@
         .attr("class", "node")
         .style("left", d => d.x0 + "px")
         .style("top", d => d.y0 + "px")
-        .style("width", d => Math.max(0, d.x1 - d.x0) + "px")
-        .style("height", d => Math.max(0, d.y1 - d.y0) + "px")
+        .style("width", d => (d.value === 0 ? width * 0.03 : Math.max(1, d.x1 - d.x0)) + "px")
+        .style("height", d => (d.value === 0 ? height * 0.03 : Math.max(1, d.y1 - d.y0)) + "px")
         .style("background", d => color(d.parent ? d.parent.data.name + "-" + d.data.name : d.data.name))
         .text(d => {
           const w = d.x1 - d.x0;
