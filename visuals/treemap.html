@@ -124,7 +124,13 @@
 
     try {
       const root = d3.hierarchy(cleanData)
-        .sum(d => metric === "total" ? (d.total ?? 0) : (d.value ?? 0))
+        .eachBefore(d => {
+          if (metric === "total") {
+            d.value = d.data.total ?? 0;
+          } else {
+            d.value = d.data.value ?? 0;
+          }
+        })
         .sort((a, b) => b.value - a.value);
 
       d3.treemap().size([width, height]).paddingInner(2)(root);
