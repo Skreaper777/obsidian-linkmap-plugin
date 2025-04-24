@@ -43,14 +43,14 @@
 <div id="controls">
   <label for="depth">Глубина: </label>
   <select id="depth">
-    <option value="all">All</option>
-    <option>1</option>
+    <option value="1" selected>1</option>
     <option>2</option>
     <option>3</option>
     <option>4</option>
     <option>5</option>
     <option>6</option>
     <option>7</option>
+    <option value="all">All</option>
   </select>
   <button id="reset">Назад</button>
 </div>
@@ -90,7 +90,8 @@
       .on("click", (event, d) => {
         if (d.children) {
           currentFocus = d.data;
-          draw(currentFocus, Infinity);
+          draw(currentFocus, 1);  // снова показываем только один уровень
+          depthSelect.value = "1";
         }
       })
       .append("title")
@@ -102,14 +103,16 @@
     .then(data => {
       originalRoot = data;
       currentFocus = data;
-      draw(currentFocus);
+      draw(currentFocus, 1);  // по умолчанию только 1 уровень
+      depthSelect.value = "1";
       depthSelect.addEventListener("change", () => {
         const val = depthSelect.value;
         draw(currentFocus, val === "all" ? Infinity : +val);
       });
       resetButton.addEventListener("click", () => {
         currentFocus = originalRoot;
-        draw(originalRoot);
+        draw(originalRoot, 1);
+        depthSelect.value = "1";
       });
     })
     .catch(err => {
