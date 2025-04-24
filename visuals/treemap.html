@@ -19,6 +19,19 @@
       background: #2c2c2c;
       border-bottom: 1px solid #444;
     }
+    #breadcrumbs {
+      display: inline-block;
+      color: #fff;
+      margin-left: 20px;
+      font-size: 14px;
+    }
+    #breadcrumbs span {
+      cursor: pointer;
+      color: #4eaaff;
+    }
+    #breadcrumbs span:hover {
+      text-decoration: underline;
+    }
     #chart {
       position: relative;
       z-index: 1;
@@ -35,7 +48,7 @@
       color: #000;
       padding: 2px;
       cursor: pointer;
-      transition: all 0.2s ease-in-out;
+      transition: all 0.3s ease;
     }
   </style>
 </head>
@@ -53,18 +66,40 @@
     <option value="all">All</option>
   </select>
   <button id="reset">Назад</button>
+  <div id="breadcrumbs"></div>
 </div>
 <div id="chart"></div>
 <script>
   const chart = d3.select("#chart");
   const depthSelect = document.getElementById("depth");
   const resetButton = document.getElementById("reset");
+  const breadcrumbs = document.getElementById("breadcrumbs");
 
   const color = d3.scaleOrdinal(d3.schemeCategory10);
   let originalRoot = null;
   let currentFocus = null;
+  let pathStack = [];
+  const hiddenNodes = new Set();
 
-  function draw(focusNode, maxDepth = Infinity) {
+  function updateBreadcrumbs() {
+    breadcrumbs.innerHTML = "";
+    pathStack.forEach((node, index) => {
+      const crumb = document.createElement("span");
+      crumb.textContent = node.data.name || "Корень";
+      crumb.onclick = () => {
+        currentFocus = node.data;
+        pathStack = pathStack.slice(0, index + 1);
+        draw(currentFocus, 1);
+        depthSelect.value = "1";
+      };
+      breadcrumbs.appendChild(crumb);
+      if (index < pathStack.length - 1) {
+        breadcrumbs.append(" > ");
+      }
+    });
+  }
+
+  function draw(focusNode, maxDepth = 1) {
     chart.selectAll("*").remove();
 
     const width = chart.node().clientWidth;
@@ -73,8 +108,8 @@
     const root = d3.hierarchy(focusNode).sum(d => d.value || 0).sort((a, b) => b.value - a.value);
     d3.treemap().size([width, height]).paddingInner(2)(root);
 
-    const nodes = chart.selectAll(".node")
-      .data(root.descendants().filter(d => d.depth <= maxDepth))
+    chart.selectAll(".node")
+      .data(root.descendants().filter(d => d.depth <= maxDepth && !hiddenNodes.has(d.data.name)))
       .join("div")
       .attr("class", "node")
       .style("left", d => d.x0 + "px")
@@ -88,10 +123,15 @@
         return (w > 40 && h > 20) ? d.data.name : "";
       })
       .on("click", (event, d) => {
-        if (d.children) {
+        if (event.ctrlKey) {
+          hiddenNodes.add(d.data.name);
+          draw(currentFocus, 1);
+        } else if (d.children) {
           currentFocus = d.data;
-          draw(currentFocus, 1);  // снова показываем только один уровень
+          pathStack.push(d);
+          draw(currentFocus, 1);
           depthSelect.value = "1";
+          updateBreadcrumbs();
         }
       })
       .append("title")
@@ -102,8 +142,11 @@
     .then(res => res.json())
     .then(data => {
       originalRoot = data;
+      const rootNode = d3.hierarchy(data);
+      pathStack = [rootNode];
       currentFocus = data;
-      draw(currentFocus, 1);  // по умолчанию только 1 уровень
+      draw(currentFocus, 1);
+      updateBreadcrumbs();
       depthSelect.value = "1";
       depthSelect.addEventListener("change", () => {
         const val = depthSelect.value;
@@ -111,8 +154,11 @@
       });
       resetButton.addEventListener("click", () => {
         currentFocus = originalRoot;
+        pathStack = [d3.hierarchy(originalRoot)];
+        hiddenNodes.clear();
         draw(originalRoot, 1);
         depthSelect.value = "1";
+        updateBreadcrumbs();
       });
     })
     .catch(err => {
