@@ -122,43 +122,48 @@
     const cleanData = JSON.parse(JSON.stringify(focusNode));
     cleanData.children = getVisibleChildren(cleanData);
 
-    const root = d3.hierarchy(cleanData)
-      .sum(d => metric === "total" ? (d.total || 0) : (d.value || 0))
-      .sort((a, b) => b.value - a.value);
+    try {
+      const root = d3.hierarchy(cleanData)
+        .sum(d => metric === "total" ? (d.total ?? 0) : (d.value ?? 0))
+        .sort((a, b) => b.value - a.value);
 
-    d3.treemap().size([width, height]).paddingInner(2)(root);
+      d3.treemap().size([width, height]).paddingInner(2)(root);
 
-    chart.selectAll(".node")
-      .data(root.descendants().filter(d => d.depth <= maxDepth))
-      .join("div")
-      .attr("class", "node")
-      .style("left", d => d.x0 + "px")
-      .style("top", d => d.y0 + "px")
-      .style("width", d => Math.max(0, d.x1 - d.x0) + "px")
-      .style("height", d => Math.max(0, d.y1 - d.y0) + "px")
-      .style("background", d => color(d.parent ? d.parent.data.name + "-" + d.data.name : d.data.name))
-      .text(d => {
-        const w = d.x1 - d.x0;
-        const h = d.y1 - d.y0;
-        return (w > 40 && h > 20) ? d.data.name : "";
-      })
-      .on("click", (event, d) => {
-        if (event.altKey) {
-          hiddenNodes.add(d.data.name);
-          draw(currentFocus, 1);
-        } else if (event.ctrlKey) {
-          hiddenNodes.add(d.data.name);
-          d3.select(event.currentTarget).remove();
-        } else if (d.children) {
-          currentFocus = d.data;
-          pathStack.push(d);
-          draw(currentFocus, 1);
-          depthSelect.value = "1";
-          updateBreadcrumbs();
-        }
-      })
-      .append("title")
-      .text(d => d.data.name + "\nСсылок: " + (d.data.value || 0));
+      chart.selectAll(".node")
+        .data(root.descendants().filter(d => d.depth <= maxDepth))
+        .join("div")
+        .attr("class", "node")
+        .style("left", d => d.x0 + "px")
+        .style("top", d => d.y0 + "px")
+        .style("width", d => Math.max(0, d.x1 - d.x0) + "px")
+        .style("height", d => Math.max(0, d.y1 - d.y0) + "px")
+        .style("background", d => color(d.parent ? d.parent.data.name + "-" + d.data.name : d.data.name))
+        .text(d => {
+          const w = d.x1 - d.x0;
+          const h = d.y1 - d.y0;
+          const size = metric === "total" ? (d.data.total ?? 0) : (d.data.value ?? 0);
+          return (w > 60 && h > 20) ? `${d.data.name} :: ${size}` : "";
+        })
+        .on("click", (event, d) => {
+          if (event.altKey) {
+            hiddenNodes.add(d.data.name);
+            draw(currentFocus, 1);
+          } else if (event.ctrlKey) {
+            hiddenNodes.add(d.data.name);
+            d3.select(event.currentTarget).remove();
+          } else if (d.children) {
+            currentFocus = d.data;
+            pathStack.push(d);
+            draw(currentFocus, 1);
+            depthSelect.value = "1";
+            updateBreadcrumbs();
+          }
+        })
+        .append("title")
+        .text(d => d.data.name + "\nСсылок: " + (d.data.value || 0));
+    } catch (e) {
+      chart.append("div").style("color", "red").text("Ошибка построения визуализации: " + e.message);
+    }
   }
 
   fetch("links.json")
@@ -191,7 +196,7 @@
       });
     })
     .catch(err => {
-      chart.append("div").text("Ошибка загрузки links.json");
+      chart.append("div").style("color", "red").text("Ошибка загрузки links.json: " + err.message);
       console.error(err);
     });
 </script>
