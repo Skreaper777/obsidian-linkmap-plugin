@@ -8,7 +8,7 @@
  *  • rootLimit               — лимит количества ПЕРВЫХ дочерних узлов
  *  • childLimit              — лимит количества дочерних узлов на остальных уровнях (0 = без лимита)
  *  • only_unique_page        — если true, страница встречается лишь один раз
- *  • sizeLimitKB             — максимальный размер выходного файла (0 = без лимита).
+ *  • sizeLimitRows             — максимальный размер выходного файла (0 = без лимита).
  *                              При превышении дальнейшее расширение дерева прекращается, но JSON корректен.
  *  • nameMaxLength           — максимальная длина свойства name (0 = не обрезать)
  */
@@ -32,6 +32,7 @@ interface TreeNode {
   path: string;                      // Полный путь к файлу
   "number-of-children": number;      // прямые дети
   "total-number-of-children": number;// все потомки
+  "total-number-of-children-and-grandchildren": number;// дети + внуки
   children?: TreeNode[];
 }
 
@@ -41,7 +42,7 @@ interface LinkMapSettings {
   rootLimit: number;
   childLimit: number;
   only_unique_page: boolean;
-  sizeLimitKB: number;
+  sizeLimitRows: number;
   nameMaxLength: number;
 }
 
@@ -52,7 +53,7 @@ const DEFAULT_SETTINGS: LinkMapSettings = {
   rootLimit: 0,
   childLimit: 0,
   only_unique_page: false,
-  sizeLimitKB: 10000,
+  sizeLimitRows: 300,
   nameMaxLength: 0,
 };
 
@@ -116,7 +117,7 @@ class LinkMapSettingTab extends PluginSettingTab {
                 key === "maxRootDepth" ||
                 key === "rootLimit" ||
                 key === "childLimit" ||
-                key === "sizeLimitKB" ||
+                key === "sizeLimitRows" ||
                 key === "nameMaxLength"
                   ? Number(v) || 0
                   : v.trim();
@@ -154,9 +155,9 @@ class LinkMapSettingTab extends PluginSettingTab {
           })
       );
     addText(
-      "Лимит размера файла (KB)",
+      "Лимит строк файла",
       "0 = без ограничения",
-      "sizeLimitKB",
+      "sizeLimitRows",
       "0"
     );
     addText(
@@ -210,9 +211,9 @@ export async function generateLinkTree(app: App, cfg: LinkMapSettings) {
   const visited = new Set<string>();
 
   // ---------- Контроль размера ----------
-  let approxSize = 0;
+  let rowsCount = 0;
   const limitHit = () =>
-    cfg.sizeLimitKB > 0 && approxSize / 1024 > cfg.sizeLimitKB;
+    cfg.sizeLimitRows > 0 && rowsCount / 1024 > cfg.sizeLimitRows;
 
   function buildNode(
     path: string,
@@ -266,10 +267,11 @@ export async function generateLinkTree(app: App, cfg: LinkMapSettings) {
       path,
       "number-of-children": numChildren,
       "total-number-of-children": totalChildren,
+      "total-number-of-children-and-grandchildren": totalChildren + children.reduce((s,c)=>s + c["number-of-children"],0),
       children,
     };
 
-    approxSize += JSON.stringify(node).length;
+    rowsCount += JSON.stringify(node, null, 2).split('\n').length;
     return node;
   }
 
