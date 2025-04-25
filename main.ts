@@ -1,15 +1,18 @@
 
-// 📁 main.ts — плагин Link Map (полностью обновлённый)
-//
-// 🛈 Особенности:
-//   • depth ограничивается параметром maxDepth (относительно rootFolder)
-//   • rootLimit ограничивает количество ПЕРВЫХ дочерних элементов rootFolder
-//   • dedupe — исключать повторное появление заметки
-//   • sizeLimitKB — не создавать links.json, если итоговый размер превышает лимит
-//
-//   value  = количество прямых дочерних ссылок
-//   total  = количество ВСЕХ потомков (рекурсивно)
-//
+/**
+ * 📁 main.ts — Link Map Plugin (полностью переработан)
+ *
+ * Параметры:
+ *  • rootPathFile            — полный путь к стартовой заметке (MD). Строим дерево ссылок от неё.
+ *  • maxRootDepth            — максимальная глубина (0 = без лимита) относительно rootPathFile
+ *  • rootLimit               — лимит количества ПЕРВЫХ дочерних узлов
+ *  • childLimit              — лимит количества дочерних узлов на остальных уровнях (0 = без лимита)
+ *  • only_unique_page        — если true, страница встречается лишь один раз
+ *  • sizeLimitKB             — максимальный размер выходного файла (0 = без лимита).
+ *                              При превышении дальнейшее расширение дерева прекращается, но JSON корректен.
+ *  • nameMaxLength           — максимальная длина свойства name (0 = не обрезать)
+ */
+
 import {
   Plugin,
   Notice,
@@ -22,56 +25,49 @@ import {
 } from "obsidian";
 import { promises as fs } from "fs";
 
+// ------------------------------ Types ---------------------------------
+
 interface TreeNode {
-  name: string;
-  value: number;           // прямые дети
-  total: number;           // все потомки
+  name: string;                      // Человекочитаемое имя заметки
+  path: string;                      // Полный путь к файлу
+  "number-of-children": number;      // прямые дети
+  "total-number-of-children": number;// все потомки
   children?: TreeNode[];
 }
 
-// ---------------------- Настройки ----------------------
 interface LinkMapSettings {
-  rootFolder: string;
-  maxDepth: number;     // 0 = без лимита
-  rootLimit: number;    // лимит прямых детей rootFolder (0 = без лимита)
-  dedupe: boolean;      // убирать дубли
-  sizeLimitKB: number;  // максимальный размер links.json (0 = без лимита)
+  rootPathFile: string;
+  maxRootDepth: number;
+  rootLimit: number;
+  childLimit: number;
+  only_unique_page: boolean;
+  sizeLimitKB: number;
+  nameMaxLength: number;
 }
 
+// ------------------------------ Defaults ------------------------------
 const DEFAULT_SETTINGS: LinkMapSettings = {
-  rootFolder: "Теги",
-  maxDepth: 5,
-  rootLimit: 5,
-  dedupe: false,
-  sizeLimitKB: 0,
+  rootPathFile: "Теги/_Теги (main).md",
+  maxRootDepth: 6,
+  rootLimit: 0,
+  childLimit: 0,
+  only_unique_page: false,
+  sizeLimitKB: 10000,
+  nameMaxLength: 0,
 };
 
-// ---------------------- Плагин ----------------------
+// ------------------------------ Plugin --------------------------------
 export default class LinkMapPlugin extends Plugin {
   settings: LinkMapSettings = DEFAULT_SETTINGS;
 
   async onload() {
     await this.loadSettings();
 
-    // Основная команда
     this.addCommand({
-      id: "generate-link-tree",
+      id: "generate-linkmap",
       name: "Сгенерировать карту ссылок (links.json)",
       callback: async () => {
-        await generateLinkTree(
-          this.app,
-          this.settings,
-        );
-      },
-    });
-
-    // Debug‑команда (dedupe=false)
-    this.addCommand({
-      id: "generate-link-tree-debug",
-      name: "Сгенерировать карту ссылок (debug: dedupe=false)",
-      callback: async () => {
-        const dbg = { ...this.settings, dedupe: false };
-        await generateLinkTree(this.app, dbg);
+        await generateLinkTree(this.app, this.settings);
       },
     });
 
@@ -88,7 +84,7 @@ export default class LinkMapPlugin extends Plugin {
   }
 }
 
-// ---------------------- UI настроек ----------------------
+// -------------------------- Settings UI -------------------------------
 class LinkMapSettingTab extends PluginSettingTab {
   plugin: LinkMapPlugin;
   constructor(app: App, plugin: LinkMapPlugin) {
@@ -99,210 +95,191 @@ class LinkMapSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Настройки Link Map" });
+    containerEl.createEl("h2", { text: "Link Map — настройки" });
 
-    new Setting(containerEl)
-      .setName("Корневая папка")
-      .setDesc("С какой папки начинать построение дерева")
-      .addText((text) =>
-        text
-          .setPlaceholder("Теги")
-          .setValue(this.plugin.settings.rootFolder)
-          .onChange(async (v) => {
-            this.plugin.settings.rootFolder = v.trim() || "Теги";
-            await this.plugin.saveSettings();
-          })
-      );
+    const addText = (
+      name: string,
+      desc: string,
+      key: keyof LinkMapSettings,
+      placeholder = ""
+    ) =>
+      new Setting(containerEl)
+        .setName(name)
+        .setDesc(desc)
+        .addText((t) =>
+          t
+            .setPlaceholder(placeholder)
+            .setValue(String(this.plugin.settings[key]))
+            .onChange(async (v) => {
+              // @ts-ignore
+              this.plugin.settings[key] =
+                key === "maxRootDepth" ||
+                key === "rootLimit" ||
+                key === "childLimit" ||
+                key === "sizeLimitKB" ||
+                key === "nameMaxLength"
+                  ? Number(v) || 0
+                  : v.trim();
+              await this.plugin.saveSettings();
+            })
+        );
 
+    addText(
+      "Путь к стартовой заметке",
+      "Пример: Теги/_Теги (main).md",
+      "rootPathFile"
+    );
+    addText("Максимальная глубина", "0 = без ограничения", "maxRootDepth", "0");
+    addText(
+      "Лимит детей первого уровня",
+      "0 = без ограничения",
+      "rootLimit",
+      "0"
+    );
+    addText(
+      "Лимит детей на остальных уровнях",
+      "0 = без ограничения",
+      "childLimit",
+      "0"
+    );
     new Setting(containerEl)
-      .setName("Максимальная глубина")
-      .setDesc("0 = без ограничения (считается от rootFolder)")
-      .addText((text) =>
-        text
-          .setPlaceholder("0")
-          .setValue(String(this.plugin.settings.maxDepth))
-          .onChange(async (v) => {
-            this.plugin.settings.maxDepth = Number(v) || 0;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Лимит корневых элементов")
-      .setDesc("0 = без ограничения")
-      .addText((text) =>
-        text
-          .setPlaceholder("0")
-          .setValue(String(this.plugin.settings.rootLimit))
-          .onChange(async (v) => {
-            this.plugin.settings.rootLimit = Number(v) || 0;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Дедупликация")
-      .setDesc("Если включено – заметка появляется только один раз")
+      .setName("Уникальные страницы")
+      .setDesc("Если включено — каждая страница встречается единожды")
       .addToggle((toggle) =>
         toggle
-          .setValue(this.plugin.settings.dedupe)
+          .setValue(this.plugin.settings.only_unique_page)
           .onChange(async (v) => {
-            this.plugin.settings.dedupe = v;
+            this.plugin.settings.only_unique_page = v;
             await this.plugin.saveSettings();
           })
       );
-
-    new Setting(containerEl)
-      .setName("Лимит размера файла (KB)")
-      .setDesc("0 = без ограничения")
-      .addText((text) =>
-        text
-          .setPlaceholder("0")
-          .setValue(String(this.plugin.settings.sizeLimitKB))
-          .onChange(async (v) => {
-            this.plugin.settings.sizeLimitKB = Number(v) || 0;
-            await this.plugin.saveSettings();
-          })
-      );
+    addText(
+      "Лимит размера файла (KB)",
+      "0 = без ограничения",
+      "sizeLimitKB",
+      "0"
+    );
+    addText(
+      "Максимальная длина «name»",
+      "0 = не обрезать",
+      "nameMaxLength",
+      "0"
+    );
   }
 }
 
-// ---------------------- Логика ----------------------
+// ----------------------------- Logic ----------------------------------
 
-// Асинхронно строит дерево и записывает links.json
 export async function generateLinkTree(app: App, cfg: LinkMapSettings) {
   const { vault, metadataCache } = app;
-  const depthLimit = cfg.maxDepth > 0 ? cfg.maxDepth : Infinity;
+
+  const normalize = (p: string) => normalizePath(p.split("#")[0]);
+  const fileName = (path: string) =>
+    path.substring(path.lastIndexOf("/") + 1, path.lastIndexOf(".")) || path;
+
+  const depthLimit = cfg.maxRootDepth > 0 ? cfg.maxRootDepth : Infinity;
   const rootWidth = cfg.rootLimit > 0 ? cfg.rootLimit : Infinity;
-  const dedupe = cfg.dedupe;
+  const childWidth = cfg.childLimit > 0 ? cfg.childLimit : Infinity;
 
-  // Собираем все markdown в нужной папке
-  const markdownFiles: TFile[] = vault
-    .getMarkdownFiles()
-    .filter((f) => f.path.startsWith(cfg.rootFolder + "/"))
-    .slice(0, rootWidth);
+  // ---------- Стартовая заметка ----------
+  const start = vault.getAbstractFileByPath(cfg.rootPathFile);
+  if (!(start instanceof TFile)) {
+    new Notice("Стартовая заметка не найдена: " + cfg.rootPathFile);
+    return;
+  }
 
-  // Карта обратных ссылок path -> Set<srcPath>
+  // ---------- Map ----------
   const backlinksMap: Map<string, Set<string>> = new Map();
   const cacheAny: any = metadataCache;
 
-  const normalize = (p: string) => normalizePath(p.split("#")[0]);
-
-  for (const file of markdownFiles) {
-    let set: Set<string> | undefined;
+  const collect = (file: TFile) => {
+    if (backlinksMap.has(file.path)) return;
     const meta = cacheAny.getBacklinksForFile?.(file) as
       | { data: Map<string, any>; unresolved: Map<string, any> }
       | undefined;
-    if (!meta?.data) continue;
+    if (!meta?.data) return;
+    const set = new Set<string>();
+    meta.data.forEach((_, raw) => set.add(normalize(raw as string)));
+    meta.unresolved?.forEach((_, raw) => set.add(normalize(raw as string)));
+    backlinksMap.set(file.path, set);
+  };
 
-    const collect = (raw: string) => {
-      const src = normalize(raw);
-      set = backlinksMap.get(file.path);
-if (!set) {
-  set = new Set<string>();
-  backlinksMap.set(file.path, set);
-}
-set.add(src);
-    };
+  collect(start);
 
-    meta.data.forEach((_, raw) => collect(raw as string));
-    meta.unresolved?.forEach((_, raw) => collect(raw as string));
-  }
+  // ---------- Дедупликация ----------
+  const visited = new Set<string>();
 
-  // Глобальный набор «уже добавлено», если dedupe включён
-
-  let currentSize = 0;
-const visited = new Set<string>();
+  // ---------- Контроль размера ----------
+  let approxSize = 0;
+  const limitHit = () =>
+    cfg.sizeLimitKB > 0 && approxSize / 1024 > cfg.sizeLimitKB;
 
   function buildNode(
     path: string,
     depth: number,
     ancestors: Set<string>
   ): TreeNode | null {
-    if (depthLimit !== Infinity && depth > depthLimit) return null;
-currentSize += path.length + 32; // приблизительная длина
-if (cfg.sizeLimitKB > 0 && currentSize / 1024 > cfg.sizeLimitKB) return null;
-
-    // запрещаем self‑loop и ссылки на любого предка
+    if (depth > depthLimit) return null;
     if (ancestors.has(path)) return null;
+    if (cfg.only_unique_page && visited.has(path)) return null;
+    if (cfg.only_unique_page) visited.add(path);
 
-    if (dedupe) {
-      if (visited.has(path)) return null;
-      visited.add(path);
-    }
-
-    // ленивое пополнение карты, если path ещё не собран
+    // ensure map
     if (!backlinksMap.has(path)) {
       const abs = vault.getAbstractFileByPath(path);
-      if (abs instanceof TFile && abs.extension === "md") {
-        const meta = cacheAny.getBacklinksForFile?.(abs) as
-          | { data: Map<string, any>; unresolved: Map<string, any> }
-          | undefined;
-        if (meta?.data) {
-          const set = new Set<string>();
-          meta.data.forEach((_, raw) => set.add(normalize(raw as string)));
-          meta.unresolved?.forEach((_, raw) =>
-            set.add(normalize(raw as string))
-          );
-          if (set.size) backlinksMap.set(path, set);
-        }
-      }
+      if (abs instanceof TFile && abs.extension === "md") collect(abs);
     }
 
+    const direct = backlinksMap.get(path) ?? new Set<string>();
     const children: TreeNode[] = [];
-    const direct = backlinksMap.get(path);
 
-    if (direct) {
-      for (const childPath of direct) {
-        // Пропускаем self‑link и ссылки на любого предка
-        if (childPath === path || ancestors.has(childPath)) continue;
+    const width = depth === 0 ? rootWidth : childWidth;
+    let processed = 0;
 
-        const child = buildNode(
-          childPath,
-          depth + 1,
-          new Set([...ancestors, path])
-        );
-        if (child) children.push(child);
+    for (const childPath of direct) {
+      if (childPath === path || ancestors.has(childPath)) continue;
+      if (processed >= width) break;
+      const child = buildNode(childPath, depth + 1, new Set([...ancestors, path]));
+      if (child) {
+        children.push(child);
+        processed++;
+        if (limitHit()) break;
       }
     }
 
-    // value – прямые дети, total – все потомки
-    const totalDesc =
-      children.reduce((sum, c) => sum + c.total, 0) + children.length;
+    const numChildren = children.length;
+    const totalChildren =
+      children.reduce(
+        (sum, c) => sum + c["total-number-of-children"],
+        0
+      ) + numChildren;
 
-    return {
-      name: path,
-      value: children.length,
-      total: totalDesc,
+    const makeName = () => {
+      const full = fileName(path);
+      if (cfg.nameMaxLength && cfg.nameMaxLength > 0 && full.length > cfg.nameMaxLength)
+        return full.slice(0, cfg.nameMaxLength) + "…";
+      return full;
+    };
+
+    const node: TreeNode = {
+      name: makeName(),
+      path,
+      "number-of-children": numChildren,
+      "total-number-of-children": totalChildren,
       children,
     };
+
+    approxSize += JSON.stringify(node).length;
+    return node;
   }
 
-  // rootFolder как отдельный узел
-  const root: TreeNode = {
-    name: cfg.rootFolder,
-    value: 0,
-    total: 0,
-    children: markdownFiles
-      .map((f) => buildNode(f.path, 1, new Set()))
-      .filter((n): n is TreeNode => Boolean(n)),
-  };
-  root.total =
-    (root.children?.reduce((sum, c) => sum + c.total, 0) || 0) +
-    (root.children?.length || 0);
-
-  // Пишем в файл
-  const json = JSON.stringify(root, null, 2);
-  const sizeKB = json.length / 1024;
-
-  if (cfg.sizeLimitKB > 0 && sizeKB > cfg.sizeLimitKB) {
-    new Notice(
-      `Отмена: links.json (${sizeKB.toFixed(
-        1
-      )} KB) превышает лимит ${cfg.sizeLimitKB} KB`
-    );
+  const rootNode = buildNode(start.path, 0, new Set()) as TreeNode;
+  if (!rootNode) {
+    new Notice("Не удалось построить дерево");
     return;
   }
+
+  const json = JSON.stringify(rootNode, null, 2);
 
   let outputPath = "links.json";
   const adapter = vault.adapter;
@@ -317,6 +294,8 @@ if (cfg.sizeLimitKB > 0 && currentSize / 1024 > cfg.sizeLimitKB) return null;
   }
 
   new Notice(
-    `links.json готов ✔️ depth=${cfg.maxDepth}, rootLimit=${cfg.rootLimit}, dedupe=${cfg.dedupe}`
+    `links.json создан (${(json.length / 1024).toFixed(1)} KB)${
+      limitHit() ? " — достигнут лимит" : ""
+    }`
   );
 }
