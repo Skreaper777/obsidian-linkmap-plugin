@@ -26,13 +26,12 @@ import {
 import { promises as fs } from "fs";
 
 // ------------------------------ Types ---------------------------------
-
 interface TreeNode {
-  name: string;                      // Человекочитаемое имя заметки
-  path: string;                      // Полный путь к файлу
+  name: string;                      // имя (без пути)
+  path: string;                      // полный путь
   "number-of-children": number;      // прямые дети
-  "total-number-of-children": number;// все потомки
-  "total-number-of-children-and-grandchildren": number;// дети + внуки
+  "total-number-of-children": number;// все потомки (рекурсивно)
+  "total-number-of-children-and-grandchildren": number; // дети + внуки
   children?: TreeNode[];
 }
 
@@ -46,14 +45,13 @@ interface LinkMapSettings {
   nameMaxLength: number;
 }
 
-// ------------------------------ Defaults ------------------------------
 const DEFAULT_SETTINGS: LinkMapSettings = {
   rootPathFile: "Теги/_Теги (main).md",
-  maxRootDepth: 6,
+  maxRootDepth: 7,
   rootLimit: 0,
   childLimit: 0,
-  only_unique_page: false,
-  sizeLimitRows: 300,
+  only_unique_page: true,
+  sizeLimitRows: 50,
   nameMaxLength: 0,
 };
 
@@ -182,17 +180,18 @@ export async function generateLinkTree(app: App, cfg: LinkMapSettings) {
   const rootWidth = cfg.rootLimit > 0 ? cfg.rootLimit : Infinity;
   const childWidth = cfg.childLimit > 0 ? cfg.childLimit : Infinity;
 
-  // ---------- Стартовая заметка ----------
-  const start = vault.getAbstractFileByPath(cfg.rootPathFile);
-  if (!(start instanceof TFile)) {
-    new Notice("Стартовая заметка не найдена: " + cfg.rootPathFile);
-    return;
-  }
 
-  // ---------- Map ----------
-  const backlinksMap: Map<string, Set<string>> = new Map();
-  const cacheAny: any = metadataCache;
+// ---------- Стартовая заметка ----------
+const startAbs = vault.getAbstractFileByPath(cfg.rootPathFile);
+if (!(startAbs instanceof TFile)) {
+  new Notice("Стартовая заметка не найдена: " + cfg.rootPathFile);
+  return;
+}
+const start = startAbs; // TFile
 
+// ---------- Map ----------
+const backlinksMap: Map<string, Set<string>> = new Map();
+const cacheAny: any = metadataCache;
   const collect = (file: TFile) => {
     if (backlinksMap.has(file.path)) return;
     const meta = cacheAny.getBacklinksForFile?.(file) as
@@ -213,7 +212,7 @@ export async function generateLinkTree(app: App, cfg: LinkMapSettings) {
   // ---------- Контроль размера ----------
   let rowsCount = 0;
   const limitHit = () =>
-    cfg.sizeLimitRows > 0 && rowsCount / 1024 > cfg.sizeLimitRows;
+    cfg.sizeLimitRows > 0 && rowsCount >= cfg.sizeLimitRows;
 
   function buildNode(
     path: string,
@@ -292,6 +291,20 @@ export async function generateLinkTree(app: App, cfg: LinkMapSettings) {
     );
     await fs.writeFile(outputPath, json);
   } else {
+
+// -------- Markdown экспорт ------------
+// -------- Markdown экспорт ------------
+function treeToMd(node: TreeNode, indent = 0): string {
+  const pad = "\t".repeat(indent);
+  const line = `${pad}${node.name} :: ${node["number-of-children"]} :: ${node["total-number-of-children-and-grandchildren"]} :: ${node["total-number-of-children"]}`;
+  const childrenLines = (node.children ?? []).map(c => treeToMd(c, indent + 1));
+  return [line, ...childrenLines].join("\n");
+}
+const mdContent = treeToMd(rootNode);
+const mdPath = outputPath.replace(/links\.json$/, "links.md");
+await fs.writeFile(mdPath, mdContent);
+
+
     await vault.adapter.write(outputPath, json);
   }
 
@@ -301,3 +314,4 @@ export async function generateLinkTree(app: App, cfg: LinkMapSettings) {
     }`
   );
 }
+
