@@ -22,21 +22,24 @@
       box-sizing: border-box;
       border: 1px solid #444;
       font-size: 12px;
-      white-space: normal;
-      word-break: break-word;
       padding: 2px;
       cursor: pointer;
       transition: all 0.3s ease;
     }
     .node-label {
+      /* flex:1 removed to prevent stretching */
       overflow-wrap: break-word;
+      word-break: break-word;
       white-space: normal;
-      line-height: 1.1em;
+      margin: 0;
+      /* allow multiple lines without forced full height */
+      flex-shrink: 0;
     }
     .node-value {
       font-size: 0.8em;
       color: #333;
       margin-top: 2px;
+      white-space: nowrap;
     }
     select { margin-right: 10px; }
   </style>
@@ -45,9 +48,8 @@
   <div id="controls">
     <label for="depth">Глубина: </label>
     <select id="depth">
-      <option value="1" selected>1</option>
-      <option>2</option><option>3</option><option>4</option>
-      <option>5</option><option>6</option><option>7</option>
+      <option value="1" selected>1</option><option>2</option><option>3</option>
+      <option>4</option><option>5</option><option>6</option><option>7</option>
       <option value="all">All</option>
     </select>
     <label for="metric">Размер по: </label>
@@ -126,7 +128,6 @@
           .style('top', d => d.y0 + 'px')
           .style('width', d => Math.max(0, d.x1 - d.x0) + 'px')
           .style('height', d => Math.max(0, d.y1 - d.y0) + 'px')
-          // динамический шрифт: до 30% от меньшего измерения, минимум 6px
           .style('font-size', d => {
             const dx = d.x1 - d.x0;
             const dy = d.y1 - d.y0;
@@ -134,14 +135,14 @@
             const size = Math.max(6, Math.floor(minDim * 0.3));
             return size + 'px';
           })
-          .style('line-height', d => {
-            const dy = d.y1 - d.y0;
-            return Math.floor(dy * 0.9) + 'px';
-          })
+          .style('line-height', d => Math.floor((d.y1 - d.y0) * 0.9) + 'px')
           .style('background', d => color(
             d.parent ? `${d.parent.data.name}-${d.data.name}` : d.data.name
           ))
-          .text(d => `${d.data.name} :: ${d.data['number-of-children'] || 0}`)
+          .html(d => `
+             <div class="node-label">${d.data.name}</div>
+             <div class="node-value">${d.data['number-of-children'] || 0}</div>
+          `)
           .on('click', (e, d) => {
             if (e.altKey || e.ctrlKey) hiddenNodes.add(d.data.name);
             else {
