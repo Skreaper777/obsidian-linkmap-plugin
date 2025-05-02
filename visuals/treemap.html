@@ -5,48 +5,14 @@
   <title>Linkmap Treemap</title>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <style>
-    body {
-      background-color: #1e1e1e;
-      color: #fff;
-      margin: 0;
-      font-family: sans-serif;
-    }
-    #controls {
-      position: relative;
-      z-index: 1000;
-      padding: 10px;
-      background: #2c2c2c;
-      border-bottom: 1px solid #444;
-    }
-    #breadcrumbs {
-      display: inline-block;
-      color: #fff;
-      margin-left: 20px;
-      font-size: 14px;
-    }
-    #breadcrumbs span {
-      cursor: pointer;
-      color: #4eaaff;
-    }
+    body { background-color: #1e1e1e; color: #fff; margin: 0; font-family: sans-serif; }
+    #controls { position: relative; z-index: 1000; padding: 10px; background: #2c2c2c; border-bottom: 1px solid #444; }
+    #breadcrumbs { display: inline-block; color: #fff; margin-left: 20px; font-size: 14px; }
+    #breadcrumbs span { cursor: pointer; color: #4eaaff; }
     #breadcrumbs span:hover { text-decoration: underline; }
-    #chart {
-      position: relative;
-      z-index: 1;
-      width: 100vw;
-      height: calc(100vh - 40px);
-      overflow: hidden;
-    }
-    .node {
-      position: absolute;
-      overflow: hidden;
-      box-sizing: border-box;
-      border: 1px solid #444;
-      font-size: 24px;
-      color: #000;
-      padding: 2px;
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
+    #chart { position: relative; z-index: 1; width: 100vw; height: calc(100vh - 40px); overflow: hidden; }
+    .node { position: absolute; overflow: hidden; box-sizing: border-box; border: 1px solid #444;
+      font-size: 24px; color: #000; padding: 2px; cursor: pointer; transition: all 0.3s ease; }
     select { margin-right: 10px; }
   </style>
 </head>
@@ -113,8 +79,8 @@
             if (metric === 'total-number-of-children') {
               d.value = d.data['total-number-of-children'] || 0;
             } else {
-              // number-of-children view: use total for top-level, value for deeper
-              d.value = (d.depth === 1)
+              // При режиме number-of-children: корень (depth=0) берёт total, остальные — number-of-children
+              d.value = (d.depth === 0)
                 ? (d.data['total-number-of-children'] || 0)
                 : (d.data['number-of-children'] || 0);
             }
@@ -135,9 +101,8 @@
             d.parent ? `${d.parent.data.name}-${d.data.name}` : d.data.name
           ))
           .text(d => {
-            const rectW = d.x1 - d.x0, rectH = d.y1 - d.y0;
-            return (rectW > 60 && rectH > 20)
-              ? `${d.data.name} :: ${d.value}` : '';
+            const rw = d.x1 - d.x0, rh = d.y1 - d.y0;
+            return (rw > 60 && rh > 20) ? `${d.data.name} :: ${d.value}` : '';
           })
           .on('click', (e, d) => {
             if (e.altKey || e.ctrlKey) {
