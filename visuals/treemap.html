@@ -21,18 +21,16 @@
       overflow: hidden;
       box-sizing: border-box;
       border: 1px solid #444;
-      font-size: 12px;
       padding: 2px;
       cursor: pointer;
       transition: all 0.3s ease;
+      background: #ccc;
     }
     .node-label {
-      /* flex:1 removed to prevent stretching */
       overflow-wrap: break-word;
       word-break: break-word;
       white-space: normal;
       margin: 0;
-      /* allow multiple lines without forced full height */
       flex-shrink: 0;
     }
     .node-value {
@@ -128,17 +126,13 @@
           .style('top', d => d.y0 + 'px')
           .style('width', d => Math.max(0, d.x1 - d.x0) + 'px')
           .style('height', d => Math.max(0, d.y1 - d.y0) + 'px')
+          .style('background', d => color(d.parent ? `${d.parent.data.name}-${d.data.name}` : d.data.name))
           .style('font-size', d => {
             const dx = d.x1 - d.x0;
             const dy = d.y1 - d.y0;
             const minDim = Math.min(dx, dy);
-            const size = Math.max(6, Math.floor(minDim * 0.3));
-            return size + 'px';
+            return Math.max(6, Math.floor(minDim * 0.3)) + 'px';
           })
-          .style('line-height', d => Math.floor((d.y1 - d.y0) * 0.9) + 'px')
-          .style('background', d => color(
-            d.parent ? `${d.parent.data.name}-${d.data.name}` : d.data.name
-          ))
           .html(d => `
              <div class="node-label">${d.data.name}</div>
              <div class="node-value">${d.data['number-of-children'] || 0}</div>
