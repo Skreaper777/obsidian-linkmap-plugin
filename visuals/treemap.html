@@ -15,17 +15,17 @@
       position: absolute;
       display: flex;
       flex-direction: column;
-      justify-content: flex-start; /* выравнивание по верхнему краю */
+      justify-content: flex-start;
       align-items: center;
       text-align: center;
       overflow: hidden;
       box-sizing: border-box;
       border: 1px solid #444;
-      padding: 4px 2px 2px; /* добавляем небольшой отступ сверху */
+      padding: 4px 2px 2px;
       cursor: pointer;
       transition: all 0.3s ease;
       background: #ccc;
-      line-height: 1em; /* фиксированная высота строки */
+      line-height: 1em;
     }
     .node-label {
       overflow-wrap: break-word;
@@ -47,8 +47,9 @@
   <div id="controls">
     <label for="depth">Глубина: </label>
     <select id="depth">
-      <option value="1" selected>1</option><option>2</option><option>3</option>
-      <option>4</option><option>5</option><option>6</option><option>7</option>
+      <option value="1" selected>1</option>
+      <option>2</option><option>3</option><option>4</option>
+      <option>5</option><option>6</option><option>7</option>
       <option value="all">All</option>
     </select>
     <label for="metric">Размер по: </label>
@@ -132,7 +133,8 @@
             const dx = d.x1 - d.x0;
             const dy = d.y1 - d.y0;
             const minDim = Math.min(dx, dy);
-            return Math.max(6, Math.floor(minDim * 0.3)) + 'px';
+            // размер = 20% от меньшего измерения, не менее 6px
+            return Math.min(24, Math.max(6, Math.floor(minDim * 0.2))) + 'px';
           })
           .html(d => `
              <div class="node-label">${d.data.name}</div>
