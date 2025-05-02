@@ -27,7 +27,7 @@ type TreeNode = {
   name: string;
   path: string;
   'number-of-children': number;
-  'total-number-of-children': number;
+  'total-number-of-grandchildren': number;
   'total-number-of-children-and-grandchildren': number;
   children: TreeNode[];
 };
@@ -132,6 +132,7 @@ async function generateLinkTree(app: App, cfg: LinkMapSettings) {
     }
 
     const numChildren = children.length;
+    // количество внуков: сколько у каждого прямого ребёнка есть своих детей
     const totalGrandchildren = children.reduce((sum, c) => sum + c['number-of-children'], 0);
     const totalBoth = numChildren + totalGrandchildren;
 
@@ -140,7 +141,7 @@ async function generateLinkTree(app: App, cfg: LinkMapSettings) {
       name: path.split('/').pop() || path,
       path,
       'number-of-children': numChildren,
-      'total-number-of-children': totalGrandchildren,
+      'total-number-of-grandchildren': totalGrandchildren,
       'total-number-of-children-and-grandchildren': totalBoth,
       children,
     };
