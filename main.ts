@@ -9,22 +9,25 @@ interface LinkMapSettings {
   childLimit: number;
   only_unique_page: boolean;
   sizeLimitRows: number;
-  nameMaxLength: number;
+  nameMaxLength: number; // Максимальная длина для name-short
+  temp: string;
 }
 
 /** Значения по умолчанию */
 const DEFAULT_SETTINGS: LinkMapSettings = {
-  rootPathFile: "Теги/__Теги.md",
-  maxRootDepth: 5,
+  rootPathFile: "Теги/Проекты/__Проекты.md",
+  temp : "Теги/Личное/Позитив 👍🏻/Успехи/_Успехи 🏆 (Я достиг успеха) (main).md",
+  maxRootDepth: 8,
   rootLimit: 0,
   childLimit: 0,
   only_unique_page: false,
   sizeLimitRows: 3000,
-  nameMaxLength: 0,
+  nameMaxLength: 40,
 };
 
 type TreeNode = {
-  name: string;
+  name: string;                              // оригинальное имя с расширением
+  'name-short': string;                     // имя без расширения, укороченное
   path: string;
   'number-of-children': number;
   'total-number-of-grandchildren': number;
@@ -67,7 +70,7 @@ class LinkMapSettingTab extends PluginSettingTab {
       .setName('Start file')
       .setDesc('Path to the root markdown file')
       .addText(text => text
-        .setPlaceholder('README.md')
+        .setPlaceholder('Теги/__Теги.md')
         .setValue(this.plugin.settings.rootPathFile)
         .onChange(async v => { this.plugin.settings.rootPathFile = v; await this.plugin.saveSettings(); }));
     new Setting(this.containerEl)
@@ -76,7 +79,7 @@ class LinkMapSettingTab extends PluginSettingTab {
       .addText(text => text
         .setValue(this.plugin.settings.maxRootDepth.toString())
         .onChange(async v => { this.plugin.settings.maxRootDepth = parseInt(v) || 0; await this.plugin.saveSettings(); }));
-    // добавьте остальные поля аналогично...
+    // остальные поля...
   }
 }
 
@@ -132,13 +135,23 @@ async function generateLinkTree(app: App, cfg: LinkMapSettings) {
     }
 
     const numChildren = children.length;
-    // количество внуков: сколько у каждого прямого ребёнка есть своих детей
     const totalGrandchildren = children.reduce((sum, c) => sum + c['number-of-children'], 0);
     const totalBoth = numChildren + totalGrandchildren;
 
+    // Вычисляем name и name-short с учётом целостности слов и "..."
+    const rawName = path.split('/').pop() || path;
+    const nameNoExt = rawName.replace(/\.[^/.]+$/, '');
+    let nameShort = nameNoExt;
+    if (cfg.nameMaxLength > 0 && nameNoExt.length > cfg.nameMaxLength) {
+      const after = nameNoExt.indexOf(' ', cfg.nameMaxLength);
+      const cutIndex = after > 0 ? after : nameNoExt.length;
+      nameShort = nameNoExt.slice(0, cutIndex) + '...';
+    }
+
     rowsCount += JSON.stringify({}).length;
     return {
-      name: path.split('/').pop() || path,
+      name: rawName,
+      'name-short': nameShort,
       path,
       'number-of-children': numChildren,
       'total-number-of-grandchildren': totalGrandchildren,
