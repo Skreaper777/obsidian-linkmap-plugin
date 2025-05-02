@@ -6,7 +6,6 @@
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <style>
     :root {
-      /* Регулировка отступов внутри узла */
       --node-padding-vertical: 14px;
       --node-padding-horizontal: 12px;
     }
@@ -72,7 +71,6 @@
     const resetButton = document.getElementById('reset');
     const breadcrumbs = document.getElementById('breadcrumbs');
 
-    // Получаем padding из CSS-переменных
     const rootStyles = getComputedStyle(document.documentElement);
     const padV = parseFloat(rootStyles.getPropertyValue('--node-padding-vertical'));
     const padH = parseFloat(rootStyles.getPropertyValue('--node-padding-horizontal'));
@@ -86,7 +84,7 @@
       breadcrumbs.innerHTML = '';
       pathStack.forEach((node, i) => {
         const span = document.createElement('span');
-        span.textContent = node.data.name || 'Корень';
+        span.textContent = node.data['name-short'] || node.data.name || 'Корень';
         span.onclick = () => {
           currentFocus = node.data;
           pathStack = pathStack.slice(0, i + 1);
@@ -110,60 +108,50 @@
       const clone = JSON.parse(JSON.stringify(focusNode));
       clone.children = getVisibleChildren(clone);
 
-      try {
-        const root = d3.hierarchy(clone)
-          .eachBefore(d => {
-            if (metric === 'total-number-of-grandchildren') {
-              d.value = d.data['total-number-of-grandchildren'] || 0;
-            } else {
-              if (d.depth === 0) {
-                const tot = d.data['total-number-of-grandchildren'] || 0;
-                const num = d.data['number-of-children'] || 0;
-                d.value = tot + num;
-              } else {
-                d.value = (d.data['number-of-children'] || 0) + 1;
-              }
-            }
-          })
-          .sort((a, b) => b.value - a.value);
+      const root = d3.hierarchy(clone)
+        .eachBefore(d => {
+          if (metric === 'total-number-of-grandchildren') {
+            d.value = d.data['total-number-of-grandchildren'] || 0;
+          } else if (d.depth === 0) {
+            const tot = d.data['total-number-of-grandchildren'] || 0;
+            const num = d.data['number-of-children'] || 0;
+            d.value = tot + num;
+          } else {
+            d.value = (d.data['number-of-children'] || 0) + 1;
+          }
+        })
+        .sort((a, b) => b.value - a.value);
 
-        d3.treemap().size([w, h]).paddingInner(2)(root);
+      d3.treemap().size([w, h]).paddingInner(2)(root);
 
-        chart.selectAll('.node')
-          .data(root.descendants().filter(d => d.depth > 0 && d.depth <= maxDepth))
-          .join('div')
-          .attr('class', 'node')
-          .style('left', d => d.x0 + 'px')
-          .style('top', d => d.y0 + 'px')
-          .style('width', d => Math.max(0, d.x1 - d.x0) + 'px')
-          .style('height', d => Math.max(0, d.y1 - d.y0) + 'px')
-          .style('background', d => color(d.parent ? `${d.parent.data.name}-${d.data.name}` : d.data.name))
-          .style('font-size', d => {
-            const dx = (d.x1 - d.x0) - 2 * padH;
-            const dy = (d.y1 - d.y0) - 2 * padV;
-            const minDim = Math.max(0, Math.min(dx, dy));
-            return Math.min(24, Math.max(6, Math.floor(minDim * 0.2))) + 'px';
-          })
-          .html(d => `
-            <div class="node-label">${d.data.name}</div>
-            <div class="node-value">${d.data['number-of-children'] || 0}</div>
-          `)
-          .on('click', (e, d) => {
-            if (e.altKey || e.ctrlKey) hiddenNodes.add(d.data.name);
-            else {
-              currentFocus = d.data;
-              pathStack.push(d);
-              updateBreadcrumbs();
-            }
-            draw(currentFocus, +depthSelect.value || Infinity);
-          })
-          .append('title')
-          .text(d => `${d.data.name}\nСсылок: ${d.data['number-of-children'] || 0}`);
-      } catch (err) {
-        chart.append('div')
-          .style('color', 'red')
-          .text('Ошибка визуализации: ' + err.message);
-      }
+      chart.selectAll('.node')
+        .data(root.descendants().filter(d => d.depth > 0 && d.depth <= maxDepth))
+        .join('div')
+        .attr('class', 'node')
+        .style('left', d => d.x0 + 'px')
+        .style('top', d => d.y0 + 'px')
+        .style('width', d => Math.max(0, d.x1 - d.x0) + 'px')
+        .style('height', d => Math.max(0, d.y1 - d.y0) + 'px')
+        .style('background', d => color(d.parent ? `${d.parent.data.name}-${d.data.name}` : d.data.name))
+        .style('font-size', d => {
+          const dx = (d.x1 - d.x0) - 2 * padH;
+          const dy = (d.y1 - d.y0) - 2 * padV;
+          const minDim = Math.max(0, Math.min(dx, dy));
+          return Math.min(24, Math.max(6, Math.floor(minDim * 0.2))) + 'px';
+        })
+        .html(d => `
+          <div class="node-label">${d.data['name-short'] || d.data.name}</div>
+          <div class="node-value">${d.data['number-of-children'] || 0}</div>
+        `)
+        .on('click', (e, d) => {
+          if (e.altKey || e.ctrlKey) hiddenNodes.add(d.data.name);
+          else {
+            currentFocus = d.data;
+            pathStack.push(d);
+            updateBreadcrumbs();
+          }
+          draw(currentFocus, +depthSelect.value || Infinity);
+        });
     }
 
     fetch('links.json')
