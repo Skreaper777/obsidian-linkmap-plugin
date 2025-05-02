@@ -11,8 +11,20 @@
     #breadcrumbs span { cursor: pointer; color: #4eaaff; }
     #breadcrumbs span:hover { text-decoration: underline; }
     #chart { position: relative; z-index: 1; width: 100vw; height: calc(100vh - 40px); overflow: hidden; }
-    .node { position: absolute; overflow: hidden; box-sizing: border-box; border: 1px solid #444;
-      font-size: 24px; color: #000; padding: 2px; cursor: pointer; transition: all 0.3s ease; }
+    .node {
+      position: absolute;
+      overflow: hidden;
+      box-sizing: border-box;
+      border: 1px solid #444;
+      /* базовый размер, будет переопределён инлайново */
+      font-size: 12px;
+      white-space: normal;
+      word-break: break-word;
+      color: #000;
+      padding: 2px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
     select { margin-right: 10px; }
   </style>
 </head>
@@ -21,12 +33,8 @@
     <label for="depth">Глубина: </label>
     <select id="depth">
       <option value="1" selected>1</option>
-      <option>2</option>
-      <option>3</option>
-      <option>4</option>
-      <option>5</option>
-      <option>6</option>
-      <option>7</option>
+      <option>2</option><option>3</option><option>4</option>
+      <option>5</option><option>6</option><option>7</option>
       <option value="all">All</option>
     </select>
     <label for="metric">Размер по: </label>
@@ -105,19 +113,25 @@
           .style('top', d => d.y0 + 'px')
           .style('width', d => Math.max(0, d.x1 - d.x0) + 'px')
           .style('height', d => Math.max(0, d.y1 - d.y0) + 'px')
+          // динамический шрифт: до 30% от меньшего измерения, минимум 6px
+          .style('font-size', d => {
+            const dx = d.x1 - d.x0;
+            const dy = d.y1 - d.y0;
+            const minDim = Math.min(dx, dy);
+            const size = Math.max(6, Math.floor(minDim * 0.3));
+            return size + 'px';
+          })
+          .style('line-height', d => {
+            const dy = d.y1 - d.y0;
+            return Math.floor(dy * 0.9) + 'px';
+          })
           .style('background', d => color(
             d.parent ? `${d.parent.data.name}-${d.data.name}` : d.data.name
           ))
-          .text(d => {
-            const rw = d.x1 - d.x0, rh = d.y1 - d.y0;
-            return (rw > 60 && rh > 20)
-              ? `${d.data.name} :: ${d.data['number-of-children'] || 0}`
-              : '';
-          })
+          .text(d => `${d.data.name} :: ${d.data['number-of-children'] || 0}`)
           .on('click', (e, d) => {
-            if (e.altKey || e.ctrlKey) {
-              hiddenNodes.add(d.data.name);
-            } else {
+            if (e.altKey || e.ctrlKey) hiddenNodes.add(d.data.name);
+            else {
               currentFocus = d.data;
               pathStack.push(d);
               updateBreadcrumbs();
