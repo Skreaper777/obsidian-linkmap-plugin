@@ -84,9 +84,14 @@
             if (metric === 'total-number-of-grandchildren') {
               d.value = d.data['total-number-of-grandchildren'] || 0;
             } else {
-              d.value = (d.depth === 0)
-                ? (d.data['total-number-of-grandchildren'] || 0)
-                : (d.data['number-of-children'] || 0);
+              // number-of-children mode: root uses total+number, children use number+1
+              if (d.depth === 0) {
+                const tot = d.data['total-number-of-grandchildren'] || 0;
+                const num = d.data['number-of-children'] || 0;
+                d.value = tot + num;
+              } else {
+                d.value = (d.data['number-of-children'] || 0) + 1;
+              }
             }
           })
           .sort((a, b) => b.value - a.value);
