@@ -148,8 +148,9 @@ async function generateLinkTree(app: App, cfg: LinkMapSettings) {
     const numChildren = children.length;
     const numGrandchildren = children.reduce((sum, c) => sum + c['number-of-children'], 0);
     const numChildrenAndGrandchildren = numChildren + numGrandchildren;
-    // суммарное число всех потомков на всех уровнях
-    const totalAllNodes = children.reduce((sum, c) => sum + c['number-of-children'] + c['total-all-nodes'], 0);
+    // суммарное число всех потомков (каждый ребёнок + его все потомки)
+    const totalAllNodes = children.reduce((sum, c) => sum + (c['total-all-nodes'] + 1), 0);
+
 
     // Вычисляем name и name-short с учётом целостности слов и "..."
     const rawName = path.split('/').pop() || path;
