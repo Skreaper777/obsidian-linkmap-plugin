@@ -5,6 +5,11 @@
   <title>Linkmap Treemap</title>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <style>
+    :root {
+      /* Регулировка отступов внутри узла */
+      --node-padding-vertical: 14px;
+      --node-padding-horizontal: 12px;
+    }
     body { background-color: #1e1e1e; color: #fff; margin: 0; font-family: sans-serif; }
     #controls { position: relative; z-index: 1000; padding: 10px; background: #2c2c2c; border-bottom: 1px solid #444; }
     #breadcrumbs { display: inline-block; color: #fff; margin-left: 20px; font-size: 14px; }
@@ -15,13 +20,13 @@
       position: absolute;
       display: flex;
       flex-direction: column;
-      justify-content: flex-start;
+      justify-content: center;
       align-items: center;
       text-align: center;
-      overflow: hidden;
       box-sizing: border-box;
       border: 1px solid #444;
-      padding: 4px 2px 2px;
+      overflow: hidden;
+      padding: var(--node-padding-vertical) var(--node-padding-horizontal);
       cursor: pointer;
       transition: all 0.3s ease;
       background: #ccc;
@@ -37,7 +42,7 @@
     .node-value {
       font-size: 0.8em;
       color: #333;
-      margin-top: 2px;
+      margin-top: 4px;
       white-space: nowrap;
     }
     select { margin-right: 10px; }
@@ -49,8 +54,7 @@
     <select id="depth">
       <option value="1" selected>1</option>
       <option>2</option><option>3</option><option>4</option>
-      <option>5</option><option>6</option><option>7</option>
-      <option value="all">All</option>
+      <option>5</option><option>6</option><option>7</option><option value="all">All</option>
     </select>
     <label for="metric">Размер по: </label>
     <select id="metric">
@@ -67,6 +71,11 @@
     const metricSelect = document.getElementById('metric');
     const resetButton = document.getElementById('reset');
     const breadcrumbs = document.getElementById('breadcrumbs');
+
+    // Получаем padding из CSS-переменных
+    const rootStyles = getComputedStyle(document.documentElement);
+    const padV = parseFloat(rootStyles.getPropertyValue('--node-padding-vertical'));
+    const padH = parseFloat(rootStyles.getPropertyValue('--node-padding-horizontal'));
 
     const color = d3.scaleOrdinal(d3.schemeCategory10);
     let originalRoot = null, currentFocus = null;
@@ -130,15 +139,14 @@
           .style('height', d => Math.max(0, d.y1 - d.y0) + 'px')
           .style('background', d => color(d.parent ? `${d.parent.data.name}-${d.data.name}` : d.data.name))
           .style('font-size', d => {
-            const dx = d.x1 - d.x0;
-            const dy = d.y1 - d.y0;
-            const minDim = Math.min(dx, dy);
-            // размер = 20% от меньшего измерения, не менее 6px
+            const dx = (d.x1 - d.x0) - 2 * padH;
+            const dy = (d.y1 - d.y0) - 2 * padV;
+            const minDim = Math.max(0, Math.min(dx, dy));
             return Math.min(24, Math.max(6, Math.floor(minDim * 0.2))) + 'px';
           })
           .html(d => `
-             <div class="node-label">${d.data.name}</div>
-             <div class="node-value">${d.data['number-of-children'] || 0}</div>
+            <div class="node-label">${d.data.name}</div>
+            <div class="node-value">${d.data['number-of-children'] || 0}</div>
           `)
           .on('click', (e, d) => {
             if (e.altKey || e.ctrlKey) hiddenNodes.add(d.data.name);
