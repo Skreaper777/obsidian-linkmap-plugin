@@ -16,7 +16,7 @@ interface LinkMapSettings {
 /** Значения по умолчанию */
 const DEFAULT_SETTINGS: LinkMapSettings = {
   rootPathFile: "Теги/Проекты/__Проекты.md",
-  temp : "Теги/Личное/Позитив 👍🏻/Успехи/_Успехи 🏆 (Я достиг успеха) (main).md",
+  temp: "Теги/Личное/Позитив 👍🏻/Успехи/_Успехи 🏆 (Я достиг успеха) (main).md",
   maxRootDepth: 8,
   rootLimit: 0,
   childLimit: 0,
@@ -26,12 +26,13 @@ const DEFAULT_SETTINGS: LinkMapSettings = {
 };
 
 type TreeNode = {
-  name: string;                              // оригинальное имя с расширением
-  'name-short': string;                     // имя без расширения, укороченное
+  name: string;                                   // оригинальное имя с расширением
+  'name-short': string;                          // имя без расширения, укороченное
   path: string;
   'number-of-children': number;
-  'total-number-of-grandchildren': number;
-  'total-number-of-children-and-grandchildren': number;
+  'number-of-grandchildren': number;             // переименовано
+  'number-of-children-and-grandchildren': number; // переименовано
+  'total-all-nodes': number;                     // новый параметр
   children: TreeNode[];
 };
 
@@ -70,9 +71,16 @@ class LinkMapSettingTab extends PluginSettingTab {
       .setName('Start file')
       .setDesc('Path to the root markdown file')
       .addText(text => text
-        .setPlaceholder('Теги/__Теги.md')
+        .setPlaceholder(DEFAULT_SETTINGS.rootPathFile)
         .setValue(this.plugin.settings.rootPathFile)
         .onChange(async v => { this.plugin.settings.rootPathFile = v; await this.plugin.saveSettings(); }));
+    new Setting(this.containerEl)
+      .setName('Temp file path')
+      .setDesc('Дополнительный файл (temp)')
+      .addText(text => text
+        .setPlaceholder(DEFAULT_SETTINGS.temp)
+        .setValue(this.plugin.settings.temp)
+        .onChange(async v => { this.plugin.settings.temp = v; await this.plugin.saveSettings(); }));
     new Setting(this.containerEl)
       .setName('Max root depth')
       .setDesc('0 = no limit')
@@ -95,6 +103,9 @@ async function generateLinkTree(app: App, cfg: LinkMapSettings) {
     return;
   }
   const start = startAbs;
+
+  // При необходимости учитываем cfg.temp
+  // const tempAbs = vault.getAbstractFileByPath(cfg.temp);
 
   const backlinksMap = new Map<string, Set<string>>();
   function collect(file: TFile) {
@@ -135,8 +146,10 @@ async function generateLinkTree(app: App, cfg: LinkMapSettings) {
     }
 
     const numChildren = children.length;
-    const totalGrandchildren = children.reduce((sum, c) => sum + c['number-of-children'], 0);
-    const totalBoth = numChildren + totalGrandchildren;
+    const numGrandchildren = children.reduce((sum, c) => sum + c['number-of-children'], 0);
+    const numChildrenAndGrandchildren = numChildren + numGrandchildren;
+    // суммарное число всех потомков на всех уровнях
+    const totalAllNodes = children.reduce((sum, c) => sum + c['number-of-children'] + c['total-all-nodes'], 0);
 
     // Вычисляем name и name-short с учётом целостности слов и "..."
     const rawName = path.split('/').pop() || path;
@@ -154,8 +167,9 @@ async function generateLinkTree(app: App, cfg: LinkMapSettings) {
       'name-short': nameShort,
       path,
       'number-of-children': numChildren,
-      'total-number-of-grandchildren': totalGrandchildren,
-      'total-number-of-children-and-grandchildren': totalBoth,
+      'number-of-grandchildren': numGrandchildren,
+      'number-of-children-and-grandchildren': numChildrenAndGrandchildren,
+      'total-all-nodes': totalAllNodes,
       children,
     };
   }
