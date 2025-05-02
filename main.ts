@@ -15,7 +15,7 @@ interface LinkMapSettings {
 /** Значения по умолчанию */
 const DEFAULT_SETTINGS: LinkMapSettings = {
   rootPathFile: "Теги/__Теги.md",
-  maxRootDepth: 3,
+  maxRootDepth: 5,
   rootLimit: 0,
   childLimit: 0,
   only_unique_page: false,
