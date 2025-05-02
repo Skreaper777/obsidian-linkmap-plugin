@@ -13,17 +13,30 @@
     #chart { position: relative; z-index: 1; width: 100vw; height: calc(100vh - 40px); overflow: hidden; }
     .node {
       position: absolute;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
       overflow: hidden;
       box-sizing: border-box;
       border: 1px solid #444;
-      /* базовый размер, будет переопределён инлайново */
       font-size: 12px;
       white-space: normal;
       word-break: break-word;
-      color: #000;
       padding: 2px;
       cursor: pointer;
       transition: all 0.3s ease;
+    }
+    .node-label {
+      overflow-wrap: break-word;
+      white-space: normal;
+      line-height: 1.1em;
+    }
+    .node-value {
+      font-size: 0.8em;
+      color: #333;
+      margin-top: 2px;
     }
     select { margin-right: 10px; }
   </style>
