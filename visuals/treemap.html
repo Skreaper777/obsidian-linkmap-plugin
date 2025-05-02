@@ -20,14 +20,19 @@
   <div id="controls">
     <label for="depth">Глубина: </label>
     <select id="depth">
-      <option value="1" selected>1</option><option>2</option><option>3</option>
-      <option>4</option><option>5</option><option>6</option>
-      <option>7</option><option value="all">All</option>
+      <option value="1" selected>1</option>
+      <option>2</option>
+      <option>3</option>
+      <option>4</option>
+      <option>5</option>
+      <option>6</option>
+      <option>7</option>
+      <option value="all">All</option>
     </select>
     <label for="metric">Размер по: </label>
     <select id="metric">
       <option value="number-of-children" selected>number-of-children</option>
-      <option value="total-number-of-children">total-number-of-children</option>
+      <option value="total-number-of-grandchildren">total-number-of-grandchildren</option>
     </select>
     <button id="reset">Назад</button>
     <div id="breadcrumbs"></div>
@@ -76,12 +81,11 @@
       try {
         const root = d3.hierarchy(clone)
           .eachBefore(d => {
-            if (metric === 'total-number-of-children') {
-              d.value = d.data['total-number-of-children'] || 0;
+            if (metric === 'total-number-of-grandchildren') {
+              d.value = d.data['total-number-of-grandchildren'] || 0;
             } else {
-              // При режиме number-of-children: корень (depth=0) берёт total, остальные — number-of-children
               d.value = (d.depth === 0)
-                ? (d.data['total-number-of-children'] || 0)
+                ? (d.data['total-number-of-grandchildren'] || 0)
                 : (d.data['number-of-children'] || 0);
             }
           })
