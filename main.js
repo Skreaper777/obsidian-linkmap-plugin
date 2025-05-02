@@ -9,57 +9,31 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateLinkTree = generateLinkTree;
-// 📁 main.ts — плагин Link Map (полностью обновлённый)
-//
-// 🛈 Особенности:
-//   • depth ограничивается параметром maxDepth (относительно rootFolder)
-//   • rootLimit ограничивает количество ПЕРВЫХ дочерних элементов rootFolder
-//   • dedupe — исключать повторное появление заметки
-//   • sizeLimitKB — не создавать links.json, если итоговый размер превышает лимит
-//
-//   value  = количество прямых дочерних ссылок
-//   total  = количество ВСЕХ потомков (рекурсивно)
-//
 const obsidian_1 = require("obsidian");
 const fs_1 = require("fs");
+/** Значения по умолчанию */
 const DEFAULT_SETTINGS = {
-    rootFolder: "Теги",
-    maxDepth: 5,
-    rootLimit: 5,
-    dedupe: false,
-    sizeLimitKB: 0,
+    rootPathFile: "Теги/Проекты/__Проекты.md",
+    temp: "Теги/Личное/Позитив 👍🏻/Успехи/_Успехи 🏆 (Я достиг успеха) (main).md",
+    maxRootDepth: 8,
+    rootLimit: 0,
+    childLimit: 0,
+    only_unique_page: false,
+    sizeLimitRows: 3000,
+    nameMaxLength: 40,
 };
-// ---------------------- Плагин ----------------------
 class LinkMapPlugin extends obsidian_1.Plugin {
-    constructor() {
-        super(...arguments);
-        this.settings = DEFAULT_SETTINGS;
-    }
     onload() {
         return __awaiter(this, void 0, void 0, function* () {
             yield this.loadSettings();
-            // Основная команда
             this.addCommand({
-                id: "generate-link-tree",
-                name: "Сгенерировать карту ссылок (links.json)",
-                callback: () => __awaiter(this, void 0, void 0, function* () {
-                    yield generateLinkTree(this.app, this.settings);
-                }),
-            });
-            // Debug‑команда (dedupe=false)
-            this.addCommand({
-                id: "generate-link-tree-debug",
-                name: "Сгенерировать карту ссылок (debug: dedupe=false)",
-                callback: () => __awaiter(this, void 0, void 0, function* () {
-                    const dbg = Object.assign(Object.assign({}, this.settings), { dedupe: false });
-                    yield generateLinkTree(this.app, dbg);
-                }),
+                id: 'generate-link-tree',
+                name: 'Generate Link Tree JSON',
+                callback: () => generateLinkTree(this.app, this.settings),
             });
             this.addSettingTab(new LinkMapSettingTab(this.app, this));
         });
     }
-    onunload() { }
     loadSettings() {
         return __awaiter(this, void 0, void 0, function* () {
             this.settings = Object.assign({}, DEFAULT_SETTINGS, yield this.loadData());
@@ -72,175 +46,123 @@ class LinkMapPlugin extends obsidian_1.Plugin {
     }
 }
 exports.default = LinkMapPlugin;
-// ---------------------- UI настроек ----------------------
 class LinkMapSettingTab extends obsidian_1.PluginSettingTab {
     constructor(app, plugin) {
         super(app, plugin);
         this.plugin = plugin;
     }
     display() {
-        const { containerEl } = this;
-        containerEl.empty();
-        containerEl.createEl("h2", { text: "Настройки Link Map" });
-        new obsidian_1.Setting(containerEl)
-            .setName("Корневая папка")
-            .setDesc("С какой папки начинать построение дерева")
-            .addText((text) => text
-            .setPlaceholder("Теги")
-            .setValue(this.plugin.settings.rootFolder)
-            .onChange((v) => __awaiter(this, void 0, void 0, function* () {
-            this.plugin.settings.rootFolder = v.trim() || "Теги";
-            yield this.plugin.saveSettings();
-        })));
-        new obsidian_1.Setting(containerEl)
-            .setName("Максимальная глубина")
-            .setDesc("0 = без ограничения (считается от rootFolder)")
-            .addText((text) => text
-            .setPlaceholder("0")
-            .setValue(String(this.plugin.settings.maxDepth))
-            .onChange((v) => __awaiter(this, void 0, void 0, function* () {
-            this.plugin.settings.maxDepth = Number(v) || 0;
-            yield this.plugin.saveSettings();
-        })));
-        new obsidian_1.Setting(containerEl)
-            .setName("Лимит корневых элементов")
-            .setDesc("0 = без ограничения")
-            .addText((text) => text
-            .setPlaceholder("0")
-            .setValue(String(this.plugin.settings.rootLimit))
-            .onChange((v) => __awaiter(this, void 0, void 0, function* () {
-            this.plugin.settings.rootLimit = Number(v) || 0;
-            yield this.plugin.saveSettings();
-        })));
-        new obsidian_1.Setting(containerEl)
-            .setName("Дедупликация")
-            .setDesc("Если включено – заметка появляется только один раз")
-            .addToggle((toggle) => toggle
-            .setValue(this.plugin.settings.dedupe)
-            .onChange((v) => __awaiter(this, void 0, void 0, function* () {
-            this.plugin.settings.dedupe = v;
-            yield this.plugin.saveSettings();
-        })));
-        new obsidian_1.Setting(containerEl)
-            .setName("Лимит размера файла (KB)")
-            .setDesc("0 = без ограничения")
-            .addText((text) => text
-            .setPlaceholder("0")
-            .setValue(String(this.plugin.settings.sizeLimitKB))
-            .onChange((v) => __awaiter(this, void 0, void 0, function* () {
-            this.plugin.settings.sizeLimitKB = Number(v) || 0;
-            yield this.plugin.saveSettings();
-        })));
+        this.containerEl.empty();
+        new obsidian_1.Setting(this.containerEl)
+            .setName('Start file')
+            .setDesc('Path to the root markdown file')
+            .addText(text => text
+            .setPlaceholder(DEFAULT_SETTINGS.rootPathFile)
+            .setValue(this.plugin.settings.rootPathFile)
+            .onChange((v) => __awaiter(this, void 0, void 0, function* () { this.plugin.settings.rootPathFile = v; yield this.plugin.saveSettings(); })));
+        new obsidian_1.Setting(this.containerEl)
+            .setName('Temp file path')
+            .setDesc('Дополнительный файл (temp)')
+            .addText(text => text
+            .setPlaceholder(DEFAULT_SETTINGS.temp)
+            .setValue(this.plugin.settings.temp)
+            .onChange((v) => __awaiter(this, void 0, void 0, function* () { this.plugin.settings.temp = v; yield this.plugin.saveSettings(); })));
+        new obsidian_1.Setting(this.containerEl)
+            .setName('Max root depth')
+            .setDesc('0 = no limit')
+            .addText(text => text
+            .setValue(this.plugin.settings.maxRootDepth.toString())
+            .onChange((v) => __awaiter(this, void 0, void 0, function* () { this.plugin.settings.maxRootDepth = parseInt(v) || 0; yield this.plugin.saveSettings(); })));
+        // остальные поля...
     }
 }
-// ---------------------- Логика ----------------------
-// Асинхронно строит дерево и записывает links.json
 function generateLinkTree(app, cfg) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c, _d;
         const { vault, metadataCache } = app;
-        const depthLimit = cfg.maxDepth > 0 ? cfg.maxDepth : Infinity;
-        const rootWidth = cfg.rootLimit > 0 ? cfg.rootLimit : Infinity;
-        const dedupe = cfg.dedupe;
-        // Собираем все markdown в нужной папке
-        const markdownFiles = vault
-            .getMarkdownFiles()
-            .filter((f) => f.path.startsWith(cfg.rootFolder + "/"))
-            .slice(0, rootWidth);
-        // Карта обратных ссылок path -> Set<srcPath>
-        const backlinksMap = new Map();
-        const cacheAny = metadataCache;
-        const normalize = (p) => (0, obsidian_1.normalizePath)(p.split("#")[0]);
-        for (const file of markdownFiles) {
-            let set;
-            const meta = (_a = cacheAny.getBacklinksForFile) === null || _a === void 0 ? void 0 : _a.call(cacheAny, file);
-            if (!(meta === null || meta === void 0 ? void 0 : meta.data))
-                continue;
-            const collect = (raw) => {
-                const src = normalize(raw);
-                set = backlinksMap.get(file.path);
-                if (!set) {
-                    set = new Set();
-                    backlinksMap.set(file.path, set);
-                }
-                set.add(src);
-            };
-            meta.data.forEach((_, raw) => collect(raw));
-            (_b = meta.unresolved) === null || _b === void 0 ? void 0 : _b.forEach((_, raw) => collect(raw));
-        }
-        // Глобальный набор «уже добавлено», если dedupe включён
-        let currentSize = 0;
+        const depthLimit = cfg.maxRootDepth > 0 ? cfg.maxRootDepth : Infinity;
+        let rowsCount = 0;
         const visited = new Set();
+        const startAbs = vault.getAbstractFileByPath(cfg.rootPathFile);
+        if (!(startAbs instanceof obsidian_1.TFile)) {
+            new obsidian_1.Notice('Стартовая заметка не найдена: ' + cfg.rootPathFile);
+            return;
+        }
+        const start = startAbs;
+        // При необходимости учитываем cfg.temp
+        // const tempAbs = vault.getAbstractFileByPath(cfg.temp);
+        const backlinksMap = new Map();
+        function collect(file) {
+            var _a, _b, _c;
+            if (backlinksMap.has(file.path))
+                return;
+            const meta = (_b = (_a = metadataCache).getBacklinksForFile) === null || _b === void 0 ? void 0 : _b.call(_a, file);
+            if (!(meta === null || meta === void 0 ? void 0 : meta.data))
+                return;
+            const set = new Set();
+            meta.data.forEach((_, raw) => set.add(raw));
+            (_c = meta.unresolved) === null || _c === void 0 ? void 0 : _c.forEach((_, raw) => set.add(raw));
+            backlinksMap.set(file.path, set);
+        }
+        collect(start);
         function buildNode(path, depth, ancestors) {
-            var _a, _b;
-            if (depthLimit !== Infinity && depth > depthLimit)
+            var _a;
+            if (depth > depthLimit || ancestors.has(path))
                 return null;
-            currentSize += path.length + 32; // приблизительная длина
-            if (cfg.sizeLimitKB > 0 && currentSize / 1024 > cfg.sizeLimitKB)
+            if (cfg.only_unique_page && visited.has(path))
                 return null;
-            // запрещаем self‑loop и ссылки на любого предка
-            if (ancestors.has(path))
-                return null;
-            if (dedupe) {
-                if (visited.has(path))
-                    return null;
+            if (cfg.only_unique_page)
                 visited.add(path);
-            }
-            // ленивое пополнение карты, если path ещё не собран
             if (!backlinksMap.has(path)) {
                 const abs = vault.getAbstractFileByPath(path);
-                if (abs instanceof obsidian_1.TFile && abs.extension === "md") {
-                    const meta = (_a = cacheAny.getBacklinksForFile) === null || _a === void 0 ? void 0 : _a.call(cacheAny, abs);
-                    if (meta === null || meta === void 0 ? void 0 : meta.data) {
-                        const set = new Set();
-                        meta.data.forEach((_, raw) => set.add(normalize(raw)));
-                        (_b = meta.unresolved) === null || _b === void 0 ? void 0 : _b.forEach((_, raw) => set.add(normalize(raw)));
-                        if (set.size)
-                            backlinksMap.set(path, set);
-                    }
-                }
+                if (abs instanceof obsidian_1.TFile && abs.extension === 'md')
+                    collect(abs);
             }
+            const refs = (_a = backlinksMap.get(path)) !== null && _a !== void 0 ? _a : new Set();
+            const maxWidth = depth === 0 && cfg.rootLimit > 0 ? cfg.rootLimit : cfg.childLimit > 0 ? cfg.childLimit : Infinity;
             const children = [];
-            const direct = backlinksMap.get(path);
-            if (direct) {
-                for (const childPath of direct) {
-                    // Пропускаем self‑link и ссылки на любого предка
-                    if (childPath === path || ancestors.has(childPath))
-                        continue;
-                    const child = buildNode(childPath, depth + 1, new Set([...ancestors, path]));
-                    if (child)
-                        children.push(child);
+            let processed = 0;
+            for (const raw of refs) {
+                if (processed >= maxWidth)
+                    break;
+                if (raw === path || ancestors.has(raw))
+                    continue;
+                const child = buildNode(raw, depth + 1, new Set([...ancestors, path]));
+                if (child) {
+                    children.push(child);
+                    processed++;
+                    if (cfg.sizeLimitRows > 0 && rowsCount / 1024 > cfg.sizeLimitRows)
+                        break;
                 }
             }
-            // value – прямые дети, total – все потомки
-            const totalDesc = children.reduce((sum, c) => sum + c.total, 0) + children.length;
+            const numChildren = children.length;
+            const numGrandchildren = children.reduce((sum, c) => sum + c['number-of-children'], 0);
+            const numChildrenAndGrandchildren = numChildren + numGrandchildren;
+            // суммарное число всех потомков (каждый ребёнок + его все потомки)
+            const totalAllNodes = children.reduce((sum, c) => sum + (c['total-all-nodes'] + 1), 0);
+            // Вычисляем name и name-short с учётом целостности слов и "..."
+            const rawName = path.split('/').pop() || path;
+            const nameNoExt = rawName.replace(/\.[^/.]+$/, '');
+            let nameShort = nameNoExt;
+            if (cfg.nameMaxLength > 0 && nameNoExt.length > cfg.nameMaxLength) {
+                const after = nameNoExt.indexOf(' ', cfg.nameMaxLength);
+                const cutIndex = after > 0 ? after : nameNoExt.length;
+                nameShort = nameNoExt.slice(0, cutIndex) + '...';
+            }
+            rowsCount += JSON.stringify({}).length;
             return {
-                name: path,
-                value: children.length,
-                total: totalDesc,
+                name: rawName,
+                'name-short': nameShort,
+                path,
+                'number-of-children': numChildren,
+                'number-of-grandchildren': numGrandchildren,
+                'number-of-children-and-grandchildren': numChildrenAndGrandchildren,
+                'total-all-nodes': totalAllNodes,
                 children,
             };
         }
-        // rootFolder как отдельный узел
-        const root = {
-            name: cfg.rootFolder,
-            value: 0,
-            total: 0,
-            children: markdownFiles
-                .map((f) => buildNode(f.path, 1, new Set()))
-                .filter((n) => Boolean(n)),
-        };
-        root.total =
-            (((_c = root.children) === null || _c === void 0 ? void 0 : _c.reduce((sum, c) => sum + c.total, 0)) || 0) +
-                (((_d = root.children) === null || _d === void 0 ? void 0 : _d.length) || 0);
-        // Пишем в файл
-        const json = JSON.stringify(root, null, 2);
-        const sizeKB = json.length / 1024;
-        if (cfg.sizeLimitKB > 0 && sizeKB > cfg.sizeLimitKB) {
-            new obsidian_1.Notice(`Отмена: links.json (${sizeKB.toFixed(1)} KB) превышает лимит ${cfg.sizeLimitKB} KB`);
-            return;
-        }
-        let outputPath = "links.json";
+        const rootNode = buildNode(start.path, 0, new Set());
+        const json = JSON.stringify(rootNode, null, 2);
+        let outputPath = 'links.json';
         const adapter = vault.adapter;
         if (adapter instanceof obsidian_1.FileSystemAdapter) {
             const base = adapter.getBasePath();
@@ -250,6 +172,7 @@ function generateLinkTree(app, cfg) {
         else {
             yield vault.adapter.write(outputPath, json);
         }
-        new obsidian_1.Notice(`links.json готов ✔️ depth=${cfg.maxDepth}, rootLimit=${cfg.rootLimit}, dedupe=${cfg.dedupe}`);
+        new obsidian_1.Notice(`links.json создан (${(json.length / 1024).toFixed(1)} KB)` +
+            (cfg.sizeLimitRows > 0 && rowsCount / 1024 > cfg.sizeLimitRows ? ' — достигнут лимит' : ''));
     });
 }
