@@ -15,16 +15,17 @@
       position: absolute;
       display: flex;
       flex-direction: column;
-      justify-content: center;
+      justify-content: flex-start; /* выравнивание по верхнему краю */
       align-items: center;
       text-align: center;
       overflow: hidden;
       box-sizing: border-box;
       border: 1px solid #444;
-      padding: 2px;
+      padding: 4px 2px 2px; /* добавляем небольшой отступ сверху */
       cursor: pointer;
       transition: all 0.3s ease;
       background: #ccc;
+      line-height: 1em; /* фиксированная высота строки */
     }
     .node-label {
       overflow-wrap: break-word;
