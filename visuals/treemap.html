@@ -58,7 +58,8 @@
     <label for="metric">Размер по: </label>
     <select id="metric">
       <option value="number-of-children" selected>number-of-children</option>
-      <option value="total-number-of-grandchildren">total-number-of-grandchildren</option>
+      <option value="number-of-grandchildren">number-of-grandchildren</option>
+      <option value="number-of-children-and-grandchildren">number-of-children-and-grandchildren</option>
     </select>
     <button id="reset">Назад</button>
     <div id="breadcrumbs"></div>
@@ -84,6 +85,7 @@
       breadcrumbs.innerHTML = '';
       pathStack.forEach((node, i) => {
         const span = document.createElement('span');
+        // Для первого элемента показываем название родительского уровня
         span.textContent = node.data['name-short'] || node.data.name || 'Корень';
         span.onclick = () => {
           currentFocus = node.data;
@@ -110,12 +112,12 @@
 
       const root = d3.hierarchy(clone)
         .eachBefore(d => {
-          if (metric === 'total-number-of-grandchildren') {
-            d.value = d.data['total-number-of-grandchildren'] || 0;
+          if (metric === 'number-of-grandchildren') {
+            d.value = (d.data['number-of-grandchildren'] || 0) + 1;
+          } else if (metric === 'number-of-children-and-grandchildren') {
+            d.value = (d.data['number-of-children'] || 0) + (d.data['number-of-grandchildren'] || 0);
           } else if (d.depth === 0) {
-            const tot = d.data['total-number-of-grandchildren'] || 0;
-            const num = d.data['number-of-children'] || 0;
-            d.value = tot + num;
+            d.value = d.data['number-of-children'] || 0;
           } else {
             d.value = (d.data['number-of-children'] || 0) + 1;
           }
@@ -141,7 +143,7 @@
         })
         .html(d => `
           <div class="node-label">${d.data['name-short'] || d.data.name}</div>
-          <div class="node-value">${d.data['number-of-children'] || 0}</div>
+          <div class="node-value">${d.value}</div>
         `)
         .on('click', (e, d) => {
           if (e.altKey || e.ctrlKey) hiddenNodes.add(d.data.name);
@@ -159,7 +161,8 @@
       .then(data => {
         originalRoot = data;
         currentFocus = data;
-        pathStack = [];
+        // Инициализируем хлебные крошки с корневым уровнем
+        pathStack = [d3.hierarchy(data)];
         draw(data, 1);
         updateBreadcrumbs();
 
@@ -167,7 +170,7 @@
         metricSelect.onchange = () => draw(currentFocus, +depthSelect.value || Infinity);
         resetButton.onclick = () => {
           currentFocus = originalRoot;
-          pathStack = [];
+          pathStack = [d3.hierarchy(originalRoot)];
           hiddenNodes.clear();
           draw(originalRoot, +depthSelect.value || Infinity);
           updateBreadcrumbs();
